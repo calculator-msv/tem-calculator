@@ -57,8 +57,8 @@ ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'main_app' / 'templates'],  # Вказуємо прямий шлях до шаблонів
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',  # <-- Правильний шлях
+        'DIRS': [BASE_DIR / 'main_app' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
