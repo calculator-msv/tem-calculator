@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>ТЕМ - Керування містами</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #1b3022; color: #fff; padding: 30px; display: flex; justify-content: center; margin: 0; }
+        .container { width: 600px; background: rgba(255,255,255,0.1); padding: 25px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { color: #2ecc71; border-bottom: 2px solid #2ecc71; padding-bottom: 10px; margin-top: 0; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { padding: 12px; border-radius: 6px; border: none; font-weight: bold; }
+        input[type="text"] { flex-grow: 1; }
+        input[type="number"] { width: 90px; }
+        .btn-add { background: #27ae60; color: white; border: none; padding: 0 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .city-list { background: white; color: #333; border-radius: 8px; overflow: hidden; max-height: 400px; overflow-y: auto; }
+        .city-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid #eee; }
+        .city-item:last-child { border-bottom: none; }
+        .city-name { font-weight: bold; font-size: 16px; color: #2c3e50; }
+        .city-val { color: #27ae60; font-weight: bold; background: #e8f4fd; padding: 4px 8px; border-radius: 4px; }
+        .btn-del { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .back-link { display: inline-block; margin-top: 20px; color: #bdc3c7; text-decoration: none; font-size: 14px; }
+        .back-link:hover { color: #fff; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🏙️ База міст за Наказом</h2>
+    <p style="font-size: 13px; color: #bdc3c7;">Додайте міста та відсоток надбавки. Ці дані зберігаються у вашій базі даних і будуть автоматично застосовані в калькуляторі.</p>
+
+    <div class="input-group">
+        <input type="text" id="cityName" placeholder="Назва населеного пункту">
+        <input type="number" id="cityVal" placeholder="%" step="0.1" value="0">
+        <button class="btn-add" onclick="addCity()">ДОДАТИ</button>
+    </div>
+
+    <div class="city-list" id="cityList">
+        <div style="padding:20px; text-align:center; color:#999;">Завантаження з бази...</div>
+    </div>
+
+    <a href="{% url 'calc' %}" class="back-link">← Повернутися до калькулятора</a>
+</div>
+
+<script>
+    window.onload = function() {
+        loadCities();
+    };
+
+    function loadCities() {
+        const formData = new FormData();
+        formData.append('action', 'fetch_cities');
+
+        fetch('/api/cities/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                const list = document.getElementById('cityList');
+                list.innerHTML = "";
+
+                if (res.success && res.data.length > 0) {
+                    const cityMap = {};
+
+                    res.data.forEach(item => {
+                        cityMap[item.name] = parseFloat(item.percent);
+
+                        const div = document.createElement('div');
+                        div.className = 'city-item';
+                        div.innerHTML = `
+                            <div>
+                                <span class="city-name">${item.name}</span>
+                                <span class="city-val">+${item.percent}%</span>
+                            </div>
+                            <button class="btn-del" onclick="deleteCity(${item.id}, '${item.name}')">Видалити</button>
+                        `;
+                        list.appendChild(div);
+                    });
+
+                    localStorage.setItem('city_db_permanent', JSON.stringify(cityMap));
+                } else {
+                    list.innerHTML = "<div style='padding:20px; text-align:center; color:#999;'>База міст порожня</div>";
+                    localStorage.removeItem('city_db_permanent');
+                }
+            })
+            .catch(err => console.error("Помилка завантаження міст:", err));
+    }
+
+    function addCity() {
+        const nameInput = document.getElementById('cityName');
+        const valInput = document.getElementById('cityVal');
+
+        const name = nameInput.value.trim();
+        const val = valInput.value;
+
+        if (!name || val === "") return alert("Заповніть назву та відсоток!");
+
+        const formData = new FormData();
+        formData.append('action', 'add_city');
+        formData.append('name', name);
+        formData.append('percent', val);
+
+        fetch('/api/cities/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success) {
+                    nameInput.value = "";
+                    valInput.value = "0";
+                    loadCities();
+                } else {
+                    alert(res.message || "Помилка додавання міста");
+                }
+            })
+            .catch(err => alert("Помилка зв'язку з сервером"));
+    }
+
+    function deleteCity(id, name) {
+        if (confirm(`Видалити місто "${name}" з бази даних?`)) {
+            const formData = new FormData();
+            formData.append('action', 'delete_city');
+            formData.append('city_id', id);
+
+            fetch('/api/cities/', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(res => {
+                    if (res.success) {
+                        loadCities();
+                    } else {
+                        alert("Не вдалося видалити місто.");
+                    }
+                });
+        }
+    }
+</script>
+</body>
+</html>

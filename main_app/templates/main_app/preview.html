@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>2. РОБОТА МАШИНИ - Звіт</title>
+    <style>
+        body { background: #525659; font-family: "Times New Roman", serif; padding: 20px; display: flex; flex-direction: column; align-items: center; margin: 0; }
+        .paper { background: white; width: 297mm; min-height: 210mm; padding: 10mm; box-shadow: 0 0 10px rgba(0,0,0,0.5); font-size: 9pt; line-height: 1.2; color: black; box-sizing: border-box; }
+        .controls { background: white; padding: 10px; width: 297mm; margin-bottom: 10px; display: flex; gap: 10px; border-radius: 5px; position: sticky; top: 0; z-index: 100; box-sizing: border-box; }
+
+        h3.section-header { text-align: center; text-transform: uppercase; margin: 0 0 10px 0; font-size: 11pt; font-weight: bold; letter-spacing: 0.5px; }
+
+        table.route-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 8pt; }
+        table.route-table th, table.route-table td { border: 1px solid black; padding: 3px 2px; text-align: center; vertical-align: middle; }
+        table.route-table th { background: #fff; font-weight: normal; }
+
+        .section-title { font-weight: bold; margin-top: 12px; text-decoration: underline; text-transform: uppercase; font-size: 9pt; }
+        .math-box { background: #fff; border: 1px solid #000; padding: 6px; margin: 6px 0; font-size: 8.5pt; }
+
+        .coeffs-detail-list { margin: 3px 0 0 15px; padding: 0; font-size: 8pt; line-height: 1.3; }
+        .coeffs-detail-list li { margin-bottom: 1px; }
+
+        .formula-card { background: #fdfdfd; padding: 8px; border: 1px solid #000; margin-top: 6px; font-size: 8.5pt; }
+        .formula-main { text-align: center; font-weight: bold; font-size: 9.5pt; margin-bottom: 6px; }
+        .formula-legend { font-size: 8pt; line-height: 1.3; margin-bottom: 6px; padding-left: 8px; }
+        .formula-list { font-family: "Courier New", monospace; font-size: 8pt; line-height: 1.4; background: #f4f4f4; padding: 6px; border: 1px dashed #666; margin-top: 4px; }
+
+        .total-sum-box { font-family: "Courier New", monospace; background: #eef9f1; border: 1px solid #27ae60; padding: 6px; margin-top: 6px; font-size: 8.5pt; font-weight: bold; color: #1e7e34; }
+        .total-line { font-weight: bold; font-size: 10pt; border: 2px solid black; margin-top: 10px; padding: 6px; text-align: center; background: #f9f9f9; }
+
+        input { border: none; border-bottom: 1px dashed #666; font-family: inherit; font-size: inherit; text-align: center; width: 100%; background: transparent; box-sizing: border-box; }
+
+        @media print {
+            .controls { display: none; }
+            body { background: white; padding: 0; }
+            .paper { box-shadow: none; padding: 5mm; width: 100%; }
+            @page { size: A4 landscape; margin: 5mm; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <button onclick="window.print()" style="background:#27ae60; color:white; padding:8px 15px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">🖨️ ДРУК (А4 АЛЬБОМНА)</button>
+    <button onclick="reCalc()" style="background:#3498db; color:white; padding:8px 15px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">🔄 ПЕРЕРАХУВАТИ</button>
+    <button onclick="goToBook()" style="background:#8e44ad; color:white; padding:8px 15px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">📖 КНИГА ОБЛІКУ</button>
+    <button onclick="window.close()" style="background:#e74c3c; color:white; padding:8px 15px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">❌ ЗАКРИТИ</button>
+</div>
+
+<div class="paper">
+
+    <h3 class="section-header">2. РОБОТА МАШИНИ</h3>
+
+    <table class="route-table">
+        <thead>
+        <tr>
+            <th rowspan="2" style="width: 18%;">Маршрут<br>руху<br>(звідки, куди)</th>
+            <th colspan="2" style="width: 8%;">Дата та<br>час<br>(год., хв.)</th>
+            <th colspan="5" style="width: 25%;">Пройдено кілометрів</th>
+            <th colspan="3" style="width: 15%;">Відпрацьовано<br>мотогодин</th>
+            <th colspan="2" style="width: 14%;">Виконана<br>робота</th>
+            <th rowspan="2" style="width: 20%;">Показники спідометра, час і місце направлення машини в парк, підпис старшого машини</th>
+        </tr>
+        <tr>
+            <th style="width: 4%;">вибуття</th>
+            <th style="width: 4%;">прибуття</th>
+            <th style="width: 5%;">з вантажем</th>
+            <th style="width: 5%;">без вантажу</th>
+            <th style="width: 5%;">усього</th>
+            <th colspan="2" style="padding: 0;">
+                <div style="border-bottom: 1px solid black; padding: 2px 0;">в тому числі</div>
+                <div style="display: flex;">
+                    <div style="width: 50%; border-right: 1px solid black; padding: 2px 1px;">з причепом</div>
+                    <div style="width: 50%; padding: 2px 1px;">з вантажем (на буксирі)</div>
+                </div>
+            </th>
+            <th style="width: 5%;">на місці</th>
+            <th style="width: 5%;">під час руху</th>
+            <th style="width: 5%;">усього</th>
+            <th style="width: 9%;">найменування вантажу</th>
+            <th style="width: 5%;">кількість, т</th>
+        </tr>
+        <tr style="background:#fff; font-weight:normal;">
+            <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td>
+        </tr>
+        </thead>
+        <tbody id="detailed_rows"></tbody>
+        <tfoot>
+        <tr style="font-weight: bold; background: #f9f9f9;">
+            <td style="text-align: right;">Всього:</td>
+            <td>-</td><td>-</td>
+            <td id="tot_dist_cargo">0</td>
+            <td id="tot_dist_empty">0</td>
+            <td id="tot_dist_sum">0</td>
+            <td id="tot_dist_trailer">-</td>
+            <td id="tot_dist_tow">-</td>
+            <td id="tot_moto_idle">-</td>
+            <td id="tot_moto_drive">-</td>
+            <td id="tot_moto_sum">-</td>
+            <td>-</td>
+            <td id="tot_weight">0</td>
+            <td style="text-align: right;">Загальна витрата: <b id="tot_fuel_q" style="color: #1e7e34;">0 л</b></td>
+        </tr>
+        </tfoot>
+    </table>
+
+    <div class="section-title">1. Вихідні дані ТЗ та застосовані коефіцієнти</div>
+    <div class="math-box">
+        <b>Автомобіль:</b> <b id="view_car">---</b> |
+        <b>Базова норма (H<sub>s</sub>):</b> <b id="m_hsm">0</b> л/100км |
+        <b>Транспортна робота (H<sub>w</sub>):</b> <b id="m_hszm">0</b> л/100т·км<br>
+        <div style="margin-top: 3px;"><b>Перелік застосованих системних коефіцієнтів (K<sub>сист</sub>):</b></div>
+        <ul class="coeffs-detail-list" id="coeffs_list_render"></ul>
+        <div style="margin-top: 3px; font-weight: bold; border-top: 1px dashed #ccc; padding-top: 2px;">
+            Базовий системний коефіцієнт (місто): <span id="m_sys_k">0</span>%
+            <span id="aero_summary_note" style="color: #27ae60; font-weight: normal;"></span>
+        </div>
+    </div>
+
+    <div class="section-title">3. Покроковий розрахунок та розшифрування формули</div>
+    <div class="formula-card">
+        <div class="formula-main">
+            Q<sub>н</sub> = 0,01 · (H<sub>san</sub> · S + H<sub>w</sub> · W) · (1 + 0,01 · K<sub>Σ</sub>)
+        </div>
+        <div class="formula-legend">
+            <b>де:</b> <b>H<sub>san</sub></b> — лінійна норма на пробіг автопоїзда; <b>H<sub>s</sub></b> — базова норма (л/100 км); <b>S</b> — пробіг (км); <b>H<sub>w</sub></b> — норма на транспортну роботу (л/100 т·км); <b>W</b> — обсяг роботи (т·км); <b>K<sub>Σ</sub></b> — сумарний коефіцієнт, %.
+        </div>
+
+        <b>Розрахунок по ділянках:</b>
+        <div class="formula-list" id="formulas_container"></div>
+        <div class="total-sum-box" id="sum_addition_container"></div>
+    </div>
+
+    <div class="section-title">4. Нараховано мастильних матеріалів</div>
+    <div class="math-box">
+        • <b>Моторна олива</b> (<span id="m_per_o">0</span>л): <span class="q_copy">0</span> * <span id="m_per_o2">0</span> / 100 = <b id="res_om">0</b> л. |
+        • <b>Трансмісійна олива</b> (<span id="m_per_t">0</span>л): <span class="q_copy">0</span> * <span id="m_per_t2">0</span> / 100 = <b id="res_ot">0</b> л.<br>
+        • <b>Спеціальні олива</b> (<span id="m_per_s">0</span>л): <span class="q_copy">0</span> * <span id="m_per_s2">0</span> / 100 = <b id="res_os">0</b> л. |
+        • <b>Пластичне мастило</b> (<span id="m_per_p">0</span>л): <span class="q_copy">0</span> * <span id="m_per_p2">0</span> / 100 = <b id="res_op">0</b> кг.
+    </div>
+
+    <div class="total-line">
+        РАЗОМ ДО ВИДАЧІ / СПИСАННЯ: <span id="view_total_q">0</span> Л ПАЛЬНОГО
+    </div>
+
+    <div style="margin-top: 20px; display: flex; justify-content: space-between;">
+        <div>Водій: ____________________</div>
+        <div>Старший технік: ____________________</div>
+    </div>
+</div>
+
+<script>
+    let rawData = {};
+
+    window.onload = function() {
+        rawData = JSON.parse(localStorage.getItem('last_report_data')) || {};
+
+        document.getElementById('view_car').innerText = rawData.carName || rawData.car || "Марка/Модель";
+        document.getElementById('m_hsm').innerText = rawData.hsm || 0;
+        document.getElementById('m_hszm').innerText = rawData.hsz || 0;
+        document.getElementById('m_sys_k').innerText = rawData.sysK || 0;
+
+        const coeffContainer = document.getElementById('coeffs_list_render');
+        const coeffList = rawData.activeCoeffsList || [];
+
+        if (coeffList.length > 0) {
+            coeffContainer.innerHTML = coeffList.map(c => `<li>• ${c}</li>`).join('');
+        } else {
+            coeffContainer.innerHTML = '<li><i>Усі коригувальні коефіцієнти встановлені на 0%</i></li>';
+        }
+
+        let extraHighwayDiff = (rawData.k4 || 0) - (rawData.k5 || 0);
+        if (extraHighwayDiff !== 0) {
+            const sign = extraHighwayDiff > 0 ? '+' : '';
+            document.getElementById('aero_summary_note').innerText = ` | Для траси: ${rawData.sysK + extraHighwayDiff}% (${sign}${extraHighwayDiff}%)`;
+        }
+
+        const om = rawData.om || 0;
+        const ot = rawData.ot || 0;
+        const os = rawData.os || 0;
+        const op = rawData.op || 0;
+
+        document.getElementById('m_per_o').innerText = om; document.getElementById('m_per_o2').innerText = om;
+        document.getElementById('m_per_t').innerText = ot; document.getElementById('m_per_t2').innerText = ot;
+        document.getElementById('m_per_s').innerText = os; document.getElementById('m_per_s2').innerText = os;
+        document.getElementById('m_per_p').innerText = op; document.getElementById('m_per_p2').innerText = op;
+
+        renderRows();
+        reCalc();
+    };
+
+    function renderRows() {
+        const tbody = document.getElementById('detailed_rows');
+        tbody.innerHTML = '';
+
+        const rows = rawData.rows || [];
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;">Немає даних із калькулятора</td></tr>';
+            return;
+        }
+
+        rows.forEach((r, idx) => {
+            const tr = document.createElement('tr');
+            tr.dataset.isHighway = r.isHighway ? "true" : "false";
+            tr.dataset.sysK = (r.rowSysK !== undefined) ? r.rowSysK : (rawData.sysK || 0);
+            tr.dataset.indK = r.indK || 0;
+
+            const distVal = parseFloat(r.dist) || 0;
+            const weightVal = parseFloat(r.weight) || 0;
+
+            let distCargo = weightVal > 0 ? distVal : 0;
+            let distEmpty = weightVal === 0 ? distVal : 0;
+
+            tr.innerHTML = `
+            <td style="text-align:left;"><input type="text" class="r-route" value="${r.route}"></td>
+            <td><input type="text" class="r-dep" value="-"></td>
+            <td><input type="text" class="r-arr" value="-"></td>
+            <td><input type="number" class="r-dcargo" value="${distCargo}" oninput="reCalc()"></td>
+            <td><input type="number" class="r-dempty" value="${distEmpty}" oninput="reCalc()"></td>
+            <td><b class="r-dsum">0</b></td>
+            <td><input type="text" class="r-dtrailer" value="-"></td>
+            <td><input type="text" class="r-dtow" value="-"></td>
+            <td><input type="text" class="r-midle" value="-"></td>
+            <td><input type="text" class="r-mdrive" value="-"></td>
+            <td><span class="r-msum">-</span></td>
+            <td><input type="text" class="r-cargoname" value="${r.cargo || '-'}"></td>
+            <td><input type="number" class="r-weight" value="${weightVal}" oninput="reCalc()"></td>
+            <td><input type="text" class="r-notes" value="-"></td>
+        `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function reCalc() {
+        const hs = parseFloat(rawData.hsm) || 0;
+        const hsz = parseFloat(rawData.hsz) || 0;
+
+        let totCargoDist = 0;
+        let totEmptyDist = 0;
+        let totSumDist = 0;
+        let maxWeight = 0;
+        let totalQ = 0;
+        let formulasHtml = "";
+        let qArray = [];
+
+        const trs = document.querySelectorAll('#detailed_rows tr');
+        trs.forEach((tr, idx) => {
+            const routeName = tr.querySelector('.r-route').value || `Ділянка ${idx + 1}`;
+            const dCargo = parseFloat(tr.querySelector('.r-dcargo').value) || 0;
+            const dEmpty = parseFloat(tr.querySelector('.r-dempty').value) || 0;
+            const distTotal = dCargo + dEmpty;
+
+            tr.querySelector('.r-dsum').innerText = distTotal.toFixed(1);
+
+            const weight = parseFloat(tr.querySelector('.r-weight').value) || 0;
+            const sysK = parseFloat(tr.dataset.sysK) || 0;
+            const indK = parseFloat(tr.dataset.indK) || 0;
+            const sumK = sysK + indK;
+
+            const W = weight * distTotal;
+            const innerPart = (hs * distTotal) + (hsz * W);
+            const qi = 0.01 * innerPart * (1 + 0.01 * sumK);
+
+            totCargoDist += dCargo;
+            totEmptyDist += dEmpty;
+            totSumDist += distTotal;
+            if (weight > maxWeight) maxWeight = weight;
+            totalQ += qi;
+            qArray.push(qi.toFixed(2));
+
+            let formulaStr = `<b>${idx + 1}. ${routeName}:</b><br>`;
+            if (hsz > 0 && weight > 0) {
+                formulaStr += `&nbsp;&nbsp;Q<sub>н${idx + 1}</sub> = 0,01 · (${hs} · ${distTotal} + ${hsz} · ${W}) · (1 + 0,01 · ${sumK}) = <b>${qi.toFixed(2)} л</b><br>`;
+            } else {
+                formulaStr += `&nbsp;&nbsp;Q<sub>н${idx + 1}</sub> = 0,01 · (${hs} · ${distTotal}) · (1 + 0,01 · ${sumK}) = <b>${qi.toFixed(2)} л</b><br>`;
+            }
+            formulasHtml += formulaStr;
+        });
+
+        document.getElementById('formulas_container').innerHTML = formulasHtml || "<i>Немає ділянок для розрахунку</i>";
+
+        if (qArray.length > 0) {
+            const qNames = qArray.map((_, i) => `Q<sub>н${i + 1}</sub>`).join(' + ');
+            const qValues = qArray.join(' + ');
+            document.getElementById('sum_addition_container').innerHTML =
+                `Σ Q<sub>н</sub> = ${qNames} = ${qValues} = <u>${totalQ.toFixed(2)} л</u>`;
+        } else {
+            document.getElementById('sum_addition_container').innerHTML = `Σ Q<sub>н</sub> = 0,00 л`;
+        }
+
+        document.getElementById('tot_dist_cargo').innerText = totCargoDist.toFixed(1);
+        document.getElementById('tot_dist_empty').innerText = totEmptyDist.toFixed(1);
+        document.getElementById('tot_dist_sum').innerText = totSumDist.toFixed(1);
+        document.getElementById('tot_weight').innerText = maxWeight > 0 ? maxWeight + ' т' : '0';
+        document.getElementById('tot_fuel_q').innerText = totalQ.toFixed(2) + ' л';
+        document.getElementById('view_total_q').innerText = totalQ.toFixed(2);
+
+        document.querySelectorAll('.q_copy').forEach(el => el.innerText = totalQ.toFixed(2));
+
+        const omVal = (totalQ * (rawData.om || 0) / 100).toFixed(2);
+        const otVal = (totalQ * (rawData.ot || 0) / 100).toFixed(2);
+        const osVal = (totalQ * (rawData.os || 0) / 100).toFixed(2);
+        const opVal = (totalQ * (rawData.op || 0) / 100).toFixed(2);
+
+        document.getElementById('res_om').innerText = omVal;
+        document.getElementById('res_ot').innerText = otVal;
+        document.getElementById('res_os').innerText = osVal;
+        document.getElementById('res_op').innerText = opVal;
+    }
+
+    function goToBook() {
+        const waybillData = {
+            date: new Date().toLocaleDateString('uk-UA'),
+            docNum: 'ДЛ-' + Math.floor(1000 + Math.random() * 9000),
+            distTotal: document.getElementById('tot_dist_sum')?.innerText || '0',
+            distCargo: document.getElementById('tot_dist_cargo')?.innerText || '0',
+            distEmpty: document.getElementById('tot_dist_empty')?.innerText || '0',
+            cargoName: rawData.rows && rawData.rows.length > 0 ? rawData.rows[0].cargo : 'Вантаж',
+            weight: document.getElementById('tot_weight')?.innerText || '0',
+            tkm: (parseFloat(document.getElementById('tot_weight')?.innerText || 0) * parseFloat(document.getElementById('tot_dist_sum')?.innerText || 0)).toFixed(1),
+            fuelNorm: document.getElementById('tot_fuel_q')?.innerText.replace(' л', '') || '0',
+            fuelFact: document.getElementById('tot_fuel_q')?.innerText.replace(' л', '') || '0',
+            oilFactDetails: `M:${document.getElementById('res_om')?.innerText || 0}л, T:${document.getElementById('res_ot')?.innerText || 0}л`,
+            oilNormDetails: `M:${document.getElementById('res_om')?.innerText || 0}л, T:${document.getElementById('res_ot')?.innerText || 0}л`
+        };
+
+        localStorage.setItem('last_waybill_data', JSON.stringify(waybillData));
+        window.location.href = "{% url 'book' %}";
+    }
+</script>
+</body>
+</html>

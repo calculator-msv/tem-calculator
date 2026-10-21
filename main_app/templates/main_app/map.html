@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>ТЕМ - Професійний Навігатор</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        #app-container { display: flex; height: 100vh; }
+        .sidebar { width: 390px; background: #fff; border-right: 2px solid #ddd; display: flex; flex-direction: column; padding: 15px; z-index: 1000; overflow-y: auto; box-sizing: border-box; }
+        #map { flex: 1; height: 100%; background: #f0f0f0; }
+        .btn-back-calc { background: #2c3e50; color: white; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; margin-bottom: 10px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-back-calc:hover { background: #1a252f; }
+        .header { background: #1a73e8; color: white; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 10px; }
+        .search-container { position: relative; margin-bottom: 10px; }
+        .search-box { display: flex; gap: 5px; }
+        .search-input { flex: 1; padding: 9px; border: 1px solid #1a73e8; border-radius: 6px; font-size: 12px; outline: none; }
+        .btn-search { background: #1a73e8; color: white; border: none; border-radius: 6px; padding: 0 12px; cursor: pointer; font-weight: bold; }
+        .search-results { position: absolute; top: 40px; left: 0; right: 0; background: white; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); max-height: 180px; overflow-y: auto; display: none; z-index: 2000; }
+        .search-item { padding: 8px 10px; font-size: 11px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .search-item:hover { background: #e8f0fe; color: #1a73e8; }
+        .btn-transfer { background: #27ae60; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 5px; width: 100%; }
+        .btn-save { background: #3498db; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; }
+        .city-item { display: flex; justify-content: space-between; padding: 8px; margin-bottom: 5px; border-left: 6px solid #ccc; background: #f1f3f4; font-size: 12px; font-weight: bold; border-radius: 0 4px 4px 0; }
+
+        /* КОМПАКТНІ КАРТКИ МАРШРУТІВ */
+        .route-card {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .route-card:hover { border-color: #1a73e8; background: #f1f7ff; }
+        .route-card.active { border-color: #1a73e8; background: #e8f0fe; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+
+        .route-actions {
+            display: none;
+            gap: 6px;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed rgba(0,0,0,0.1);
+        }
+        .route-card.active .route-actions { display: flex; }
+
+        .btn-card-action { flex: 1; padding: 6px; border: none; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; color: white; }
+        .btn-card-img { background: #8e44ad; }
+        .btn-card-details { background: #27ae60; }
+        .btn-card-img:hover { background: #712b8d; }
+        .btn-card-details:hover { background: #1e8449; }
+
+        .route-details-panel { display: none; margin-top: 10px; padding: 8px; background: #fff; border: 1px solid #ccc; border-radius: 6px; font-size: 11px; }
+        .segment-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px dashed #eee; }
+        .color-badge { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+
+        .btn-del-route { position: absolute; top: 8px; right: 8px; background: #e74c3c; color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10px; }
+        #status { font-size: 11px; color: #d35400; text-align: center; margin: 5px 0; font-weight: bold; min-height: 15px; }
+        .btn-clear { background: #e74c3c; color: white; padding: 10px; border: none; border-radius: 8px; cursor: pointer; margin-top: auto; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <div class="sidebar">
+        <button class="btn-back-calc" onclick="returnToCalc()">🧮 До калькулятора</button>
+
+        <div class="header">
+            <small>Загальний пробіг:</small>
+            <div id="total-val" style="font-size: 24px; font-weight: bold;">0.0 км</div>
+        </div>
+
+        <div class="search-container">
+            <div class="search-box">
+                <input type="text" id="searchInput" class="search-input" placeholder="🔍 Введіть місто або координати..." onkeydown="if(event.key==='Enter') performSearch()">
+                <button class="btn-search" onclick="performSearch()">Пошук</button>
+            </div>
+            <div id="searchResults" class="search-results"></div>
+        </div>
+
+        <button class="btn-transfer" onclick="transferData()">📥 ДОДАТИ ДО РОЗРАХУНКУ</button>
+        <button class="btn-save" onclick="saveCurrentRoute()">📸 ЗБЕРЕГТИ В БАЗУ ДАНИХ</button>
+
+        <div id="status">Клікніть на мапі або знайдіть точку</div>
+
+        <div id="city-list"></div>
+
+        <hr>
+        <b style="font-size: 14px; color: #2c3e50;">🗂️ Збережені маршрути в БД:</b>
+        <div id="saved-list" style="margin-top: 10px;"></div>
+
+        <button class="btn-clear" onclick="location.reload()">🗑️ Очистити мапу</button>
+    </div>
+    <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    let map, routeLayer, waypoints = [], currentCityData = {}, routeSegments = [], dbRoutesList = [];
+    const colors = ['#1a73e8', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22'];
+    let cityColorMap = { "Траса": "#7f8c8d" };
+
+    function cleanEmoji(text) {
+        if (!text) return "";
+        return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+    }
+
+    window.onload = function() {
+        map = L.map('map', { center: [49.423, 26.987], zoom: 11, preferCanvas: true });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap France',
+            maxZoom: 20,
+            crossOrigin: true
+        }).addTo(map);
+
+        routeLayer = L.featureGroup().addTo(map);
+        loadSavedRoutesFromDB();
+
+        map.on('click', (e) => { addWaypoint(e.latlng.lng, e.latlng.lat); });
+    };
+
+    function addWaypoint(lng, lat) {
+        L.marker([lat, lng]).addTo(routeLayer);
+        waypoints.push([lng, lat]);
+        map.setView([lat, lng], map.getZoom());
+        if (waypoints.length >= 2) calculateDetailedRoute();
+    }
+
+    function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    async function getLocName(lat, lon, isExactPoint = false) {
+        try {
+            const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=16&addressdetails=1&accept-language=uk`);
+            const d = await r.json();
+            if (d && d.address) {
+                const addr = d.address;
+                const cityName = addr.city || addr.town || addr.township;
+                if (cityName) return cleanEmoji(cityName);
+                if (isExactPoint) {
+                    const villageName = addr.village || addr.suburb || addr.hamlet;
+                    if (villageName) return cleanEmoji(villageName);
+                }
+            }
+            return "Траса";
+        } catch(e) { return "Траса"; }
+    }
+
+    async function calculateDetailedRoute() {
+        document.getElementById('status').innerText = "⏳ Прокладаємо маршрут...";
+        const coords = waypoints.map(p => p.join(',')).join(';');
+
+        try {
+            const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+            const data = await res.json();
+            if (!data.routes || data.routes.length === 0) { alert("Не вдалося прокласти маршрут!"); return; }
+
+            routeLayer.clearLayers();
+            waypoints.forEach(p => L.marker([p[1], p[0]]).addTo(routeLayer));
+
+            const path = data.routes[0].geometry.coordinates;
+            currentCityData = {};
+            routeSegments = [];
+            cityColorMap = { "Траса": "#7f8c8d" };
+            let colorIndex = 0;
+
+            let startLoc = await getLocName(path[0][1], path[0][0], true);
+            await delay(250);
+            let endLoc = await getLocName(path[path.length - 1][1], path[path.length - 1][0], true);
+            await delay(250);
+
+            const step = Math.max(1, Math.floor(path.length / 15));
+            let lastLoc = startLoc;
+            let currentSegmentDist = 0;
+
+            for (let i = 0; i < path.length - 1; i++) {
+                const p1 = [path[i][1], path[i][0]];
+                const p2 = [path[i+1][1], path[i+1][0]];
+                const dist = map.distance(p1, p2) / 1000;
+
+                let locNow = lastLoc;
+                if (i === 0) locNow = startLoc;
+                else if (i >= path.length - 15) locNow = endLoc;
+                else if (i % step === 0) { locNow = await getLocName(p1[0], p1[1], false); await delay(150); }
+
+                if (i > 0 && locNow !== lastLoc) {
+                    if (currentSegmentDist >= 0.1) routeSegments.push({ loc: lastLoc, dist: currentSegmentDist });
+                    currentSegmentDist = 0;
+                    lastLoc = locNow;
+                }
+
+                currentSegmentDist += dist;
+                currentCityData[lastLoc] = (currentCityData[lastLoc] || 0) + dist;
+
+                if (!cityColorMap[lastLoc]) {
+                    cityColorMap[lastLoc] = colors[colorIndex % colors.length];
+                    colorIndex++;
+                }
+
+                L.polyline([p1, p2], { color: cityColorMap[lastLoc], weight: 7, opacity: 0.9 }).addTo(routeLayer);
+            }
+
+            if (currentSegmentDist >= 0.1) routeSegments.push({ loc: lastLoc, dist: currentSegmentDist });
+            renderBreakdown((data.routes[0].distance / 1000).toFixed(1));
+        } catch (err) {
+            document.getElementById('status').innerText = "❌ Помилка побудови маршруту";
+        }
+    }
+
+    function renderBreakdown(total) {
+        document.getElementById('total-val').innerText = total + " км";
+        const list = document.getElementById('city-list');
+        list.innerHTML = "";
+        for (let loc in currentCityData) {
+            const km = currentCityData[loc].toFixed(1);
+            if (km < 0.1) continue;
+            list.innerHTML += `<div class="city-item" style="border-left-color: ${cityColorMap[loc] || '#7f8c8d'}">
+                <span>${loc}</span><span>${km} км</span>
+            </div>`;
+        }
+        document.getElementById('status').innerText = "✅ Розраховано по ділянках";
+    }
+
+    async function performSearch() {
+        const query = document.getElementById('searchInput').value.trim();
+        const resultsContainer = document.getElementById('searchResults');
+        resultsContainer.style.display = 'none';
+        if (!query) return;
+
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=ua&limit=5&accept-language=uk`);
+            const data = await res.json();
+            if (data.length === 0) { alert("Нічого не знайдено!"); return; }
+            if (data.length === 1) {
+                addWaypoint(parseFloat(data[0].lon), parseFloat(data[0].lat));
+                document.getElementById('searchInput').value = '';
+            } else {
+                resultsContainer.innerHTML = '';
+                data.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'search-item';
+                    div.innerText = cleanEmoji(item.display_name);
+                    div.onclick = () => {
+                        addWaypoint(parseFloat(item.lon), parseFloat(item.lat));
+                        resultsContainer.style.display = 'none';
+                        document.getElementById('searchInput').value = '';
+                    };
+                    resultsContainer.appendChild(div);
+                });
+                resultsContainer.style.display = 'block';
+            }
+        } catch (e) { alert("Помилка з'єднання при пошуку."); }
+    }
+
+    function loadSavedRoutesFromDB() {
+        const formData = new FormData();
+        formData.append('action', 'fetch_routes');
+
+        fetch('/api/map/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                const container = document.getElementById('saved-list');
+                container.innerHTML = '';
+                if (res.success && res.data.length > 0) {
+                    dbRoutesList = res.data;
+                    res.data.forEach((r, i) => {
+                        const dateStr = r.created_at ? new Date(r.created_at).toLocaleString('uk-UA') : '';
+                        const div = document.createElement('div');
+                        div.className = 'route-card';
+                        div.id = `route-card-${i}`;
+
+                        div.onclick = function(e) {
+                            if (e.target.closest('.btn-card-action') || e.target.closest('.btn-del-route')) return;
+                            toggleCardActive(i);
+                        };
+
+                        div.innerHTML = `
+                            <button class="btn-del-route" onclick="event.stopPropagation(); deleteRouteFromDB(${r.id})">Видалити</button>
+                            <div style="font-weight: bold; color: #2c3e50; font-size: 13px;">📍 ${cleanEmoji(r.route || r.name)}</div>
+                            <small style="color: #7f8c8d; font-size: 11px;">📌 ${r.distance || r.total_dist} км (${dateStr})</small>
+
+                            <div class="route-actions">
+                                <button class="btn-card-action btn-card-img" onclick="openImageModal(${i})">🖼️ Маршрут</button>
+                                <button class="btn-card-action btn-card-details" onclick="toggleDetails(${i})">📊 Деталі</button>
+                            </div>
+
+                            <div id="details-panel-${i}" class="route-details-panel"></div>
+                        `;
+                        container.appendChild(div);
+                    });
+                } else {
+                    container.innerHTML = '<small style="color:#aaa;">Немає збережених маршрутів у БД.</small>';
+                }
+            })
+            .catch(err => console.error("Помилка завантаження маршрутів:", err));
+    }
+
+    function toggleCardActive(index) {
+        document.querySelectorAll('.route-card').forEach((card, idx) => {
+            if (idx === index) {
+                card.classList.toggle('active');
+            } else {
+                card.classList.remove('active');
+                const p = document.getElementById(`details-panel-${idx}`);
+                if (p) p.style.display = 'none';
+            }
+        });
+        selectRoute(index);
+    }
+
+    function openImageModal(index) {
+        const route = dbRoutesList[index];
+        if (!route || !route.image_data) {
+            alert("Зображення карти відсутнє!");
+            return;
+        }
+
+        const win = window.open("", "_blank");
+        win.document.write(`
+            <html>
+            <head>
+                <title>Карта маршруту - ${cleanEmoji(route.route || route.name)}</title>
+                <style>
+                    body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #2c3e50; text-align: center; color: white; }
+                    img { max-width: 95%; border-radius: 8px; border: 2px solid #fff; box-shadow: 0 5px 25px rgba(0,0,0,0.5); }
+                    .top-btn-bar { margin-bottom: 20px; display: flex; justify-content: center; gap: 10px; }
+                    .btn-print { background: #27ae60; color: white; border: none; padding: 12px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px; }
+                    .btn-save { background: #2980b9; color: white; border: none; padding: 12px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; }
+                </style>
+            </head>
+            <body>
+                <div class="top-btn-bar">
+                    <button class="btn-print" onclick="window.print()">🖨️ ДРУКУВАТИ ЗОБРАЖЕННЯ</button>
+                    <a class="btn-save" href="${route.image_data}" download="Route_${cleanEmoji(route.route || route.name)}.jpg">💾 ЗБЕРЕГТИ ФАЙЛ</a>
+                </div>
+                <h2>📍 Маршрут: ${cleanEmoji(route.route || route.name)} (${route.distance || route.total_dist} км)</h2>
+                <img src="${route.image_data}" alt="Карта">
+            </body>
+            </html>
+        `);
+    }
+
+    function toggleDetails(index) {
+        const panel = document.getElementById(`details-panel-${index}`);
+        if (!panel) return;
+
+        if (panel.style.display === 'block') {
+            panel.style.display = 'none';
+            return;
+        }
+
+        const route = dbRoutesList[index];
+        let citiesData = {};
+        let segmentsData = [];
+
+        try { citiesData = JSON.parse(route.details || route.cities_json || '{}'); } catch(e){}
+        try { segmentsData = JSON.parse(route.segments_json || '[]'); } catch(e){}
+
+        let colorIndex = 0;
+        const tempColorMap = { "Траса": "#7f8c8d" };
+        let html = `<b>📊 Розшифровка кольорів та відстаней:</b><br><br>`;
+
+        if (Array.isArray(segmentsData) && segmentsData.length > 0) {
+            segmentsData.forEach(seg => {
+                const loc = cleanEmoji(seg.loc);
+                if (!tempColorMap[loc]) {
+                    tempColorMap[loc] = colors[colorIndex % colors.length];
+                    colorIndex++;
+                }
+                const segColor = tempColorMap[loc] || '#7f8c8d';
+                const isHwy = (loc === "Траса");
+
+                html += `
+                    <div class="segment-row">
+                        <span><span class="color-badge" style="background:${segColor}"></span> <b>${isHwy ? 'Заміська траса' : 'м. ' + loc}</b></span>
+                        <b style="color:#27ae60;">${parseFloat(seg.dist).toFixed(1)} км</b>
+                    </div>
+                `;
+            });
+        } else if (typeof citiesData === 'object') {
+            for (let loc in citiesData) {
+                const cleanLoc = cleanEmoji(loc);
+                if (!tempColorMap[cleanLoc]) {
+                    tempColorMap[cleanLoc] = colors[colorIndex % colors.length];
+                    colorIndex++;
+                }
+                const segColor = tempColorMap[cleanLoc] || '#7f8c8d';
+
+                html += `
+                    <div class="segment-row">
+                        <span><span class="color-badge" style="background:${segColor}"></span> <b>${cleanLoc}</b></span>
+                        <b style="color:#27ae60;">${parseFloat(citiesData[loc]).toFixed(1)} км</b>
+                    </div>
+                `;
+            }
+        }
+
+        panel.innerHTML = html;
+        panel.style.display = 'block';
+    }
+
+    async function saveCurrentRoute() {
+        if (Object.keys(currentCityData).length === 0) return alert("Побудуйте маршрут!");
+        let name = prompt("Введіть назву маршруту (напр. Хмельницький-Красилів):");
+        if (!name) return;
+        name = cleanEmoji(name);
+
+        document.getElementById('status').innerText = "📸 Зберігаємо маршрут у базу даних...";
+
+        const mapEl = document.getElementById('map');
+        const canvas = await html2canvas(mapEl, { useCORS: true });
+        const imgData = canvas.toDataURL("image/jpeg", 0.7);
+
+        const formData = new FormData();
+        formData.append('action', 'save_route');
+        formData.append('name', name);
+        formData.append('total_dist', document.getElementById('total-val').innerText);
+        formData.append('cities_json', JSON.stringify(currentCityData));
+        formData.append('segments_json', JSON.stringify(routeSegments));
+        formData.append('image_data', imgData);
+
+        fetch('/api/map/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success) {
+                    loadSavedRoutesFromDB();
+                    document.getElementById('status').innerText = "✅ Маршрут успішно збережено у БД";
+                } else {
+                    alert("Помилка збереження у базу!");
+                }
+            })
+            .catch(err => alert("Помилка зв'язку з сервером"));
+    }
+
+    function deleteRouteFromDB(id) {
+        if (!confirm("Видалити цей маршрут з бази даних?")) return;
+        const formData = new FormData();
+        formData.append('action', 'delete_route');
+        formData.append('route_id', id);
+
+        fetch('/api/map/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success) loadSavedRoutesFromDB();
+            });
+    }
+
+    function selectRoute(i) {
+        if (!dbRoutesList[i]) return;
+        try {
+            currentCityData = JSON.parse(dbRoutesList[i].details || dbRoutesList[i].cities_json || '{}');
+            routeSegments = JSON.parse(dbRoutesList[i].segments_json || '[]');
+        } catch(e){}
+        document.getElementById('status').innerText = "📍 Обрано: " + cleanEmoji(dbRoutesList[i].route || dbRoutesList[i].name);
+    }
+
+    function transferData() {
+        if (routeSegments.length === 0 && Object.keys(currentCityData).length === 0) {
+            return alert("Побудуйте або оберіть маршрут зі списку!");
+        }
+
+        const formattedRows = [];
+
+        if (routeSegments.length > 0) {
+            for (let i = 0; i < routeSegments.length; i++) {
+                const seg = routeSegments[i];
+                const currentLoc = cleanEmoji(seg.loc);
+                const km = parseFloat(seg.dist).toFixed(1);
+
+                if (parseFloat(km) < 0.1) continue;
+
+                let isHwy = (currentLoc === "Траса");
+                let routeName = "";
+
+                if (isHwy) {
+                    const prevLoc = (i > 0) ? cleanEmoji(routeSegments[i - 1].loc) : "";
+                    const nextLoc = (i < routeSegments.length - 1) ? cleanEmoji(routeSegments[i + 1].loc) : "";
+
+                    if (prevLoc && nextLoc && prevLoc !== "Траса" && nextLoc !== "Траса") {
+                        routeName = `м. ${prevLoc} - м. ${nextLoc} (Траса)`;
+                    } else if (prevLoc && prevLoc !== "Траса") {
+                        routeName = `Виїзд з м. ${prevLoc} (Траса)`;
+                    } else if (nextLoc && nextLoc !== "Траса") {
+                        routeName = `Під'їзд до м. ${nextLoc} (Траса)`;
+                    } else {
+                        routeName = "Автомобільна дорога (Траса)";
+                    }
+                } else {
+                    routeName = `м. ${currentLoc}`;
+                }
+
+                formattedRows.push({ name: routeName, km: km, isHighway: isHwy });
+            }
+        }
+
+        localStorage.setItem('map_to_calc_detailed', JSON.stringify(formattedRows));
+
+        if (window.opener && !window.opener.closed) {
+            try {
+                if (typeof window.opener.loadRouteFromMap === 'function') {
+                    window.opener.loadRouteFromMap(formattedRows);
+                }
+            } catch (e) {}
+            window.close();
+        } else {
+            window.location.href = "{% url 'calc' %}";
+        }
+    }
+
+    function returnToCalc() {
+        if (window.opener && !window.opener.closed) {
+            window.close();
+        } else {
+            window.location.href = "{% url 'calc' %}";
+        }
+    }
+</script>
+</body>
+</html>

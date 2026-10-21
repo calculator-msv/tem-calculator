@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>ТЕМ - Коефіцієнти корегування</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #1b3022; color: #fff; padding: 20px; display: flex; justify-content: center; margin: 0; }
+        .expert-card { max-width: 900px; width: 100%; background: rgba(255,255,255,0.05); padding: 25px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { color: #2ecc71; border-bottom: 2px solid #2ecc71; padding-bottom: 10px; margin-top: 0; text-transform: uppercase; }
+
+        details.add-form-panel {
+            background: rgba(0,0,0,0.25);
+            border: 1px solid #2ecc71;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        details.add-form-panel summary {
+            padding: 12px 15px;
+            color: #2ecc71;
+            font-weight: bold;
+            font-size: 13px;
+            text-transform: uppercase;
+            cursor: pointer;
+            user-select: none;
+            outline: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        details.add-form-panel summary:hover { background: rgba(46, 204, 113, 0.1); }
+        .form-content { padding: 15px; border-top: 1px solid rgba(46, 204, 113, 0.3); }
+        .form-grid { display: grid; grid-template-columns: 2fr 3fr 1fr 1fr 100px; gap: 8px; align-items: center; }
+        .form-grid input, .form-grid select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; box-sizing: border-box; width: 100%; font-weight: bold; }
+
+        .coeff-list { list-style: none; padding: 0; margin: 0; }
+
+        .coeff-block {
+            position: relative;
+            background: rgba(255,255,255,0.1);
+            padding: 12px 30px 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.15);
+            transition: background 0.2s;
+        }
+        .coeff-block.dragging { opacity: 0.4; background: #2c3e50 !important; }
+        .drag-handle { cursor: grab; font-size: 18px; color: #bdc3c7; margin-right: 12px; user-select: none; }
+
+        .info { flex: 1; margin-right: 15px; }
+        .info b { display: block; color: #ecf0f1; font-size: 13px; outline: none; }
+        .info small { color: #bdc3c7; font-size: 11px; line-height: 1.2; display: block; margin-top: 2px; outline: none; }
+        .input-box { width: 75px; padding: 8px; font-size: 15px; border: 2px solid #2ecc71; border-radius: 5px; text-align: center; font-weight: bold; background: #fff; color: #000; }
+
+        .minus-block { border: 1px dashed #e74c3c; background: rgba(231, 76, 60, 0.15); }
+        .minus-block b { color: #ff7675; }
+        .minus-block .input-box { border-color: #e74c3c; color: #e74c3c; }
+
+        .btn-del {
+            position: absolute; top: 4px; right: 6px; background: none; border: none; cursor: pointer;
+            font-size: 11px; line-height: 1; padding: 2px 4px; color: #bdc3c7; font-weight: bold; border-radius: 3px;
+        }
+        .btn-del:hover { color: #ff7675; background: rgba(231, 76, 60, 0.2); }
+        .btn-add { background: #27ae60; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px; text-transform: uppercase; }
+        .footer-btns { position: sticky; bottom: 0; background: #1b3022; padding: 15px 0 0 0; display: flex; gap: 10px; margin-top: 20px; }
+        .btn-apply { background: #27ae60; color: white; padding: 14px; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; flex: 2; font-weight: bold; text-transform: uppercase; }
+        .btn-back { background: #34495e; color: white; padding: 14px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; flex: 1; font-weight: bold; text-transform: uppercase; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+        .btn-back:hover { background: #2c3e50; }
+    </style>
+</head>
+<body>
+
+<div class="expert-card">
+    <h2>📐 Персональні коефіцієнти корегування</h2>
+
+    <details class="add-form-panel">
+        <summary>➕ Додати новий коефіцієнт вручну</summary>
+        <div class="form-content">
+            <div class="form-grid">
+                <input type="text" id="new_title" placeholder="Назва (напр: Міський режим)">
+                <input type="text" id="new_desc" placeholder="Опис / примітка (необов'язково)">
+                <select id="new_type">
+                    <option value="plus">Підвищ. (+)</option>
+                    <option value="minus">Зменш. (-)</option>
+                </select>
+                <input type="number" id="new_val" placeholder="%" value="0" step="0.1">
+                <button class="btn-add" onclick="addNewCoeff()">Додати</button>
+            </div>
+        </div>
+    </details>
+
+    <p style="font-size: 11px; color: #bdc3c7; margin-bottom: 10px;">
+        💡 <i><b>Підказка:</b> Перетягуйте ☰ для зміни порядку. Назву та опис можна редагувати прямо в тексті.</i>
+    </p>
+
+    <ul id="coeffContainer" class="coeff-list"></ul>
+
+    <div class="footer-btns">
+        <button class="btn-apply" onclick="saveAndGoBack()">✅ ЗАСТОСУВАТИ ТА ЗБЕРЕГТИ В БД</button>
+        <button class="btn-back" onclick="goBackToCalc()">← ПОВЕРНУТИСЯ ДО КАЛЬКУЛЯТОРА</button>
+    </div>
+</div>
+
+<script>
+    const CURRENT_USER_ID = "{{ user.id|default:0 }}";
+    const USER_COEFFS_KEY = 'custom_coeffs_list_user_' + CURRENT_USER_ID;
+
+    const defaultCoeffs = [
+        { id: 'k1', title: 'Робота в зимових умовах (K1)', desc: '0°С до -5°С (2%); -5°С до -10°С (4%); -10°С до -15°С (6%); -15°С до -20°С (8%); < -20°С (10-12%)', val: 0, type: 'plus' },
+        { id: 'k4', title: 'Аеродинамічний опір (K4)', desc: 'Вантажні авто з тентом, спойлери або великогабаритний вантаж — до 5%', val: 0, type: 'plus' },
+        { id: 'k3', title: 'Обігрів салону / Клімат-контроль (K3)', desc: 'Використання кондиціонера або обігріву залежно від t°: 5% - 10%', val: 0, type: 'plus' },
+        { id: 'k5', title: 'Робота за межами населених пунктів (K5)', desc: 'Дороги заг. користування (швидкість до 90 км/год). Легкові: 15%-30% | Інші: 5%-20%', val: 0, type: 'minus' },
+        { id: 'k6', title: 'Гірська місцевість (K6)', desc: 'Висота над рівнем моря: 500-1500м (5%); 1501-2000м (10%); >2000м (15-20%)', val: 0, type: 'plus' },
+        { id: 'k7', title: 'Складний план доріг (K7)', desc: 'Наявність великої кількості закруглень радіусом < 40м — до 10%', val: 0, type: 'plus' },
+        { id: 'k8', title: 'Важкі шляхові умови (K8)', desc: 'Бездоріжжя, кар’єри, пісок, снігові замети, сильна ожеледь — до 35%', val: 0, type: 'plus' },
+        { id: 'k9', title: 'Період обкатки (K9)', desc: 'Для нових машин або після капітального ремонту (пробіг до 1000 км) — до 10%', val: 0, type: 'plus' },
+        { id: 'k10', title: 'Напрацювання (Старіння ТЗ) (K10)', desc: 'Понад 100 тис.км або 5 років (3%); Понад 150 тис.км або 8 років (5%)', val: 0, type: 'plus' },
+        { id: 'k11', title: 'Навчальна їзда (K11)', desc: 'При навчанні водіїв на дорогах загального користування — до 20%', val: 0, type: 'plus' },
+        { id: 'k12', title: 'Інтенсивні умови руху (K12)', desc: 'Робота в колонах, густий транспортний потік — до 5%', val: 0, type: 'plus' },
+        { id: 'k13', title: 'Часті зупинки (K13)', desc: 'Технологічні зупинки, маршрутні перевезення — до 10%', val: 0, type: 'plus' }
+    ];
+
+    let coeffsList = [];
+
+    window.onload = function() {
+        loadCoeffsFromDB();
+    };
+
+    function loadCoeffsFromDB() {
+        const formData = new FormData();
+        formData.append('action', 'fetch_user_coeffs');
+
+        fetch('/api/coeffs/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success && res.data && res.data.length > 0) {
+                    coeffsList = res.data;
+                } else {
+                    const localSaved = localStorage.getItem(USER_COEFFS_KEY);
+                    coeffsList = localSaved ? JSON.parse(localSaved) : defaultCoeffs;
+                }
+                localStorage.setItem(USER_COEFFS_KEY, JSON.stringify(coeffsList));
+                localStorage.setItem('custom_coeffs_list', JSON.stringify(coeffsList));
+                renderCoeffs();
+            })
+            .catch(err => {
+                const localSaved = localStorage.getItem(USER_COEFFS_KEY);
+                coeffsList = localSaved ? JSON.parse(localSaved) : defaultCoeffs;
+                renderCoeffs();
+            });
+    }
+
+    function renderCoeffs() {
+        const container = document.getElementById('coeffContainer');
+        container.innerHTML = '';
+
+        coeffsList.forEach((c, index) => {
+            const li = document.createElement('li');
+            li.className = `coeff-block ${c.type === 'minus' ? 'minus-block' : ''}`;
+            li.draggable = true;
+            li.dataset.index = index;
+
+            const isMinus = c.type === 'minus';
+
+            li.innerHTML = `
+                <button class="btn-del" onclick="deleteCoeff(${index})" title="Видалити коефіцієнт">✖</button>
+                <span class="drag-handle" title="Перетягніть для зміни порядку">☰</span>
+                <div class="info">
+                    <b contenteditable="true" onblur="updateText(${index}, 'title', this)">${c.title}</b>
+                    <small contenteditable="true" onblur="updateText(${index}, 'desc', this)">${c.desc || 'Натисніть щоб додати опис...'}</small>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <span style="font-weight:bold; color:${isMinus ? '#e74c3c' : '#2ecc71'}; margin-right:4px;">${isMinus ? '-' : '+'}</span>
+                    <input type="number" class="input-box" value="${c.val}" min="0" step="0.1" onchange="updateVal(${index}, this.value)">
+                    <span style="font-weight:bold; color:${isMinus ? '#e74c3c' : '#2ecc71'}; margin-left:4px;">%</span>
+                </div>
+            `;
+
+            setupDragAndDrop(li);
+            container.appendChild(li);
+        });
+    }
+
+    function updateText(index, field, elem) { coeffsList[index][field] = elem.innerText.trim(); }
+    function updateVal(index, value) { coeffsList[index].val = parseFloat(value) || 0; }
+
+    function addNewCoeff() {
+        const title = document.getElementById('new_title').value.trim();
+        const desc = document.getElementById('new_desc').value.trim();
+        const type = document.getElementById('new_type').value;
+        const val = parseFloat(document.getElementById('new_val').value) || 0;
+
+        if (!title) { alert("Введіть назву коефіцієнта!"); return; }
+
+        coeffsList.push({ id: 'custom_' + Date.now(), title, desc: desc || 'Користувацький коефіцієнт', val, type });
+        renderCoeffs();
+
+        document.getElementById('new_title').value = '';
+        document.getElementById('new_desc').value = '';
+        document.getElementById('new_val').value = '0';
+    }
+
+    function deleteCoeff(index) {
+        if (confirm(`Видалити коефіцієнт "${coeffsList[index].title}"?`)) {
+            coeffsList.splice(index, 1);
+            renderCoeffs();
+        }
+    }
+
+    let dragSrcIndex = null;
+    function setupDragAndDrop(elem) {
+        elem.addEventListener('dragstart', function(e) { dragSrcIndex = parseInt(this.dataset.index); this.classList.add('dragging'); });
+        elem.addEventListener('dragover', function(e) { e.preventDefault(); });
+        elem.addEventListener('drop', function(e) {
+            e.stopPropagation();
+            const targetIndex = parseInt(this.dataset.index);
+            if (dragSrcIndex !== null && dragSrcIndex !== targetIndex) {
+                const movedItem = coeffsList.splice(dragSrcIndex, 1)[0];
+                coeffsList.splice(targetIndex, 0, movedItem);
+                renderCoeffs();
+            }
+        });
+        elem.addEventListener('dragend', function() { this.classList.remove('dragging'); });
+    }
+
+    function goBackToCalc() {
+        if (window.opener && !window.opener.closed) {
+            window.close();
+        } else {
+            window.location.href = "{% url 'calc' %}";
+        }
+    }
+
+    function saveAndGoBack() {
+        // Зберігаємо персонально для акаунту в локальному сховищі
+        localStorage.setItem(USER_COEFFS_KEY, JSON.stringify(coeffsList));
+        localStorage.setItem('custom_coeffs_list', JSON.stringify(coeffsList));
+
+        const formData = new FormData();
+        formData.append('action', 'save_user_coeffs');
+        formData.append('coeffs_data', JSON.stringify(coeffsList));
+
+        fetch('/api/coeffs/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                if (window.opener && !window.opener.closed && typeof window.opener.displayActiveCoeffs === 'function') {
+                    window.opener.displayActiveCoeffs();
+                }
+                alert("Коефіцієнти успішно збережені та застосовані!");
+                goBackToCalc();
+            })
+            .catch(err => {
+                if (window.opener && !window.opener.closed && typeof window.opener.displayActiveCoeffs === 'function') {
+                    window.opener.displayActiveCoeffs();
+                }
+                alert("Коефіцієнти успішно збережені локально у вашому акаунті!");
+                goBackToCalc();
+            });
+    }
+</script>
+
+</body>
+</html>

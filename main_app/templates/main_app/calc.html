@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>ТЕМ - Калькулятор ПММ</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #1b3022; color: #fff; display: flex; padding: 20px; gap: 20px; margin: 0; min-height: 100vh; }
+        .side-panel { width: 320px; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); height: fit-content; }
+        .main-content { flex-grow: 1; background: rgba(255,255,255,0.05); padding: 25px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
+
+        h3, h4 { color: #2ecc71; margin-top: 0; border-bottom: 1px solid rgba(46, 204, 113, 0.3); padding-bottom: 5px; text-transform: uppercase; }
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 10px; color: #bdc3c7; text-transform: uppercase; }
+
+        input, select { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background: #fff; color: #000; font-weight: bold; font-size: 12px; }
+        input:disabled { background: #e0e0e0 !important; color: #7f8c8d !important; cursor: not-allowed; }
+
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.2s; text-transform: uppercase; font-size: 11px; }
+        .btn-green { background: #27ae60; color: white; }
+        .btn-blue { background: #2980b9; color: white; }
+        .btn-orange { background: #d35400; color: white; }
+        .btn-purple { background: #8e44ad; color: white; }
+
+        .city-box { margin-top: 20px; background: white; border-radius: 8px; color: #333; overflow-x: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .city-table { width: 100%; border-collapse: collapse; min-width: 880px; }
+        .city-table th { background: #2c3e50; color: white; font-size: 10px; padding: 10px 5px; text-transform: uppercase; }
+        .city-table td { padding: 5px; border-bottom: 1px solid #eee; text-align: center; }
+        .city-table input { width: 100%; border: 1px solid #dfe6e9; padding: 4px; font-size: 11px; text-align: center; background: #f9f9f9; color: #000 !important; }
+
+        .drag-handle { cursor: grab; font-weight: bold; color: #7f8c8d; user-select: none; font-size: 14px; }
+        .dragging { opacity: 0.4; background: #e8f0fe !important; }
+
+        .results { margin-top: 20px; padding: 15px; background: #2ecc71; color: #1b3022; border-radius: 8px; display: none; }
+        .res-row { display: flex; justify-content: space-between; font-weight: bold; border-bottom: 1px solid rgba(0,0,0,0.1); padding: 8px 0; }
+
+        .coeff-display { margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px; font-size: 11px; }
+        .total-k-badge { background: #f1c40f; color: #000; padding: 2px 6px; border-radius: 4px; font-size: 14px; float: right; }
+        .btn-toggle { background: #7f8c8d; color: white; transition: 0.3s; }
+        .btn-toggle.active { background: #27ae60; }
+
+        .btn-hwy { padding: 4px 8px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; background: #95a5a6; color: #fff; font-size: 11px; }
+        .btn-hwy.active { background: #27ae60; }
+
+        .btn-row-action { background: none; border: none; cursor: pointer; font-size: 13px; padding: 2px 4px; }
+        .btn-row-copy { color: #2980b9; }
+        .btn-row-copy:hover { color: #1a5276; }
+        .btn-row-del { color: #e74c3c; font-weight: bold; }
+        .btn-row-del:hover { color: #922b21; }
+
+        #trailer_input_container {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(46, 204, 113, 0.1);
+            border-radius: 6px;
+            display: none;
+            border-left: 4px solid #2ecc71;
+        }
+
+        .calc-archive-panel { margin-top: 25px; background: rgba(255,255,255,0.08); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+        .calc-archive-list { list-style: none; padding: 0; margin: 10px 0 0 0; }
+        .calc-archive-item { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body onfocus="syncData()">
+
+<div class="side-panel">
+    <!-- БЛОК ПОТОЧНОГО АКАУНТА -->
+    <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.15); font-size: 12px;">
+        <div style="color: #bdc3c7; font-weight: bold; font-size: 10px; text-transform: uppercase;">👤 ПОТОЧНИЙ АКАУНТ:</div>
+        <div style="color: #2ecc71; font-weight: bold; font-size: 14px; margin-top: 3px; word-break: break-all;">
+            {{ user.first_name|default:user.username }}
+        </div>
+        <div style="color: #aaa; font-size: 11px; margin-top: 2px;">{{ user.email }}</div>
+    </div>
+
+    <h4 style="color:#f1c40f;">🚗 Автопарк</h4>
+    <button class="btn btn-blue" onclick="location.href='{% url 'cars' %}'">БАЗА ТЗ</button>
+    <button class="btn btn-blue" style="background:#34495e;" onclick="location.href='{% url 'cities' %}'">БАЗА МІСТ</button>
+
+    <label>Вибране авто:</label>
+    <select id="carSelect" onchange="loadCar()"></select>
+
+    <div style="margin-top: 15px;">
+        <button class="btn btn-orange" style="background: #e67e22;" onclick="openCoeffsWindow()">
+            ⚙️ НАЛАШТУВАТИ КОЕФІЦІЄНТИ
+        </button>
+    </div>
+
+    <div class="coeff-display" style="border-top: 2px solid #2ecc71; margin-top: 15px; padding-top: 10px;">
+        <div style="color: #2ecc71; margin-bottom: 5px; font-weight: bold; font-size: 10px;">
+            БАЗОВИЙ СИСТЕМНИЙ К: <span id="sys_k_val" class="total-k-badge">0%</span>
+        </div>
+        <div id="active_coeffs_list" style="color: #ecf0f1; font-size: 11px; line-height: 1.4; clear: both;">
+            Немає вибраних коефіцієнтів
+        </div>
+    </div>
+
+    <button class="btn btn-orange" style="margin-top:20px;" onclick="openMapWindow()">🗺️ КАРТА МАРШРУТУ</button>
+    <button class="btn btn-purple" style="margin-top:10px;" onclick="location.href='{% url 'book' %}'">📖 КНИГА ОБЛІКУ</button>
+    <button class="btn btn-blue" style="margin-top:10px; background:#8e44ad;" onclick="location.href='{% url 'index' %}'">🏠 НА ГОЛОВНУ</button>
+</div>
+
+<div class="main-content">
+    <h3>🧮 РОЗРАХУНОК ЕКСПЛУАТАЦІЇ</h3>
+
+    <label>Конфігурація:</label>
+    <button id="trailerBtn" class="btn btn-toggle" onclick="toggleTrailer()">🚚 АВТОПОЇЗД: ВИМКН</button>
+
+    <div id="trailer_input_container">
+        <label>Споряджена маса причепа (т):</label>
+        <input type="number" id="g_trailler" value="0" step="0.1" oninput="calculate()">
+    </div>
+
+    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 40px 50px; gap: 8px; align-items: end; margin-top:10px;">
+        <div><label>Маршрут</label><input type="text" id="m_name" placeholder="Напр: Хмельницький - Красилів"></div>
+        <div><label>Відст. (км)</label><input type="number" id="m_dist" value="0"></div>
+        <div><label>Вантаж</label><input type="text" id="m_cargo" placeholder="-"></div>
+        <div><label>Вага (т)</label><input type="number" id="m_weight" value="0"></div>
+        <div><label>Інд. К (%)</label><input type="number" id="m_indk" value="0" title="Надбавка/коефіцієнт для ділянки"></div>
+        <div style="text-align:center;"><label>Траса</label><button id="m_is_hwy" class="btn-hwy" onclick="toggleTopHwyBtn(this)" style="margin-top:4px;">Т</button></div>
+        <button class="btn btn-blue" onclick="addManualRow()" style="margin:0; padding: 8px;">➕</button>
+    </div>
+
+    <div class="city-box">
+        <table class="city-table">
+            <thead>
+            <tr>
+                <th style="width:4%"></th>
+                <th style="width:26%">Маршрут руху</th>
+                <th style="width:10%">Відст. (км)</th>
+                <th style="width:18%">Вантаж</th>
+                <th style="width:10%">Вага (т)</th>
+                <th style="width:10%">Інд. К (%)</th>
+                <th style="width:8%">Траса</th>
+                <th style="width:8%"></th>
+            </tr>
+            </thead>
+            <tbody id="city_rows"></tbody>
+        </table>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button class="btn btn-green" style="font-size:16px; height:50px; flex: 2;" onclick="calculate()">ВИКОНАТИ РОЗРАХУНОК</button>
+        <button class="btn btn-purple" style="font-size:14px; height:50px; flex: 1;" onclick="saveCalculationRecord()">💾 ЗБЕРЕГТИ РОЗРАХУНОК</button>
+    </div>
+
+    <div id="results" class="results">
+        <div class="res-row"><span>ВИТРАТА ПАЛЬНОГО (Q):</span> <span><span id="r_q">0</span> Л</span></div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+            <div class="res-row" style="font-size:12px;"><span>Моторна олива:</span> <span><span id="r_om">0</span> л</span></div>
+            <div class="res-row" style="font-size:12px;"><span>Трансмісійна:</span> <span><span id="r_ot">0</span> л</span></div>
+            <div class="res-row" style="font-size:12px;"><span>Спеціальна:</span> <span><span id="r_os">0</span> л</span></div>
+            <div class="res-row" style="font-size:12px;"><span>Пластична:</span> <span><span id="r_op">0</span> л</span></div>
+        </div>
+        <button class="btn btn-blue" style="background:#1b3022; margin-top:15px;" onclick="saveForReport()">📄 СФОРМУВАТИ ЗВІТ / ДОРОЖНІЙ ЛИСТ</button>
+    </div>
+
+    <div class="calc-archive-panel">
+        <h4 style="margin: 0 0 10px 0; color: #f1c40f;">💾 Збережені розрахунки в БД (Акаунт: {{ user.username|default:"Гість" }})</h4>
+        <ul id="calcArchiveList" class="calc-archive-list">
+            <li style="color: #aaa; font-size: 11px;">Завантаження з бази даних...</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+    const CURRENT_USER_ID = "{{ user.id|default:0 }}";
+    const CARS_STORAGE_KEY = 'cars_user_' + CURRENT_USER_ID;
+    const RECENT_CARS_KEY = 'recent_car_ids_user_' + CURRENT_USER_ID;
+    const SELECTED_CAR_ID_KEY = 'selected_car_id_user_' + CURRENT_USER_ID;
+    const SELECTED_CAR_KEY = 'selectedCar_user_' + CURRENT_USER_ID;
+
+    let loadedCalculations = {};
+    let userCityDb = {};
+
+    function cleanEmoji(text) {
+        if (!text) return "";
+        return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+    }
+
+    window.onload = function() {
+        loadCitiesFromDB();
+        syncData();
+        fetchCalculationsFromDB();
+    };
+
+    window.addEventListener('storage', () => {
+        syncData();
+        calculate();
+    });
+
+    function loadCitiesFromDB() {
+        const formData = new FormData();
+        formData.append('action', 'fetch_cities');
+
+        fetch('/api/cities/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success && res.data && res.data.length > 0) {
+                    userCityDb = {};
+                    res.data.forEach(item => {
+                        userCityDb[item.name.toLowerCase()] = parseFloat(item.percent);
+                    });
+                    localStorage.setItem('city_db_permanent', JSON.stringify(userCityDb));
+                }
+            })
+            .catch(err => console.error("Помилка завантаження міст:", err));
+    }
+
+    function openCoeffsWindow() {
+        window.open('{% url "coeffs" %}', 'coeffs', 'width=680,height=850,resizable=yes,scrollbars=yes');
+    }
+
+    function openMapWindow() {
+        window.open('{% url "map" %}', '_blank');
+    }
+
+    function loadRouteFromMap(mapData) {
+        if (mapData) {
+            importFromMap(mapData);
+        }
+    }
+
+    function syncData() {
+        updateCarList();
+        displayActiveCoeffs();
+
+        const mapData = JSON.parse(localStorage.getItem('map_to_calc_detailed'));
+        if (mapData) {
+            importFromMap(mapData);
+            localStorage.removeItem('map_to_calc_detailed');
+        }
+    }
+
+    function updateCarList() {
+        const select = document.getElementById('carSelect');
+        const cars = JSON.parse(localStorage.getItem(CARS_STORAGE_KEY)) || {};
+        let recentCarIds = JSON.parse(localStorage.getItem(RECENT_CARS_KEY)) || [];
+        const currentSelectedId = localStorage.getItem(SELECTED_CAR_ID_KEY);
+
+        select.innerHTML = '';
+
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = "";
+        defaultOpt.innerText = "-- Виберіть ТЗ --";
+        defaultOpt.disabled = true;
+        defaultOpt.hidden = true;
+        select.appendChild(defaultOpt);
+
+        let validRecentIds = recentCarIds.filter(id => id && cars[id] && cars[id].name);
+
+        if (validRecentIds.length === 0) {
+            for (let k in cars) {
+                if (cars[k] && cars[k].name) {
+                    validRecentIds.push(k);
+                    if (validRecentIds.length === 5) break;
+                }
+            }
+            localStorage.setItem(RECENT_CARS_KEY, JSON.stringify(validRecentIds));
+        }
+
+        validRecentIds = validRecentIds.slice(0, 5);
+        let activeFound = false;
+
+        validRecentIds.forEach(id => {
+            const carObj = cars[id];
+            if (carObj) {
+                const opt = document.createElement('option');
+                const displayName = (carObj.plate && carObj.plate !== 'Б/Н')
+                    ? `${carObj.name} (${carObj.plate})`
+                    : carObj.name;
+
+                opt.value = id;
+                opt.innerText = displayName;
+
+                if (currentSelectedId && currentSelectedId === id) {
+                    opt.selected = true;
+                    activeFound = true;
+                }
+                select.appendChild(opt);
+            }
+        });
+
+        if (currentSelectedId && !activeFound && cars[currentSelectedId]) {
+            validRecentIds.unshift(currentSelectedId);
+            validRecentIds = validRecentIds.slice(0, 5);
+            localStorage.setItem(RECENT_CARS_KEY, JSON.stringify(validRecentIds));
+            updateCarList();
+            return;
+        }
+
+        if (!activeFound) {
+            select.value = "";
+            document.getElementById('results').style.display = 'none';
+        } else {
+            calculate();
+        }
+    }
+
+    function loadCar() {
+        const selectedKey = document.getElementById('carSelect').value;
+        const cars = JSON.parse(localStorage.getItem(CARS_STORAGE_KEY)) || {};
+
+        if (selectedKey && cars[selectedKey]) {
+            const car = cars[selectedKey];
+
+            localStorage.setItem(SELECTED_CAR_KEY, JSON.stringify(car));
+            localStorage.setItem(SELECTED_CAR_ID_KEY, selectedKey);
+
+            let recentCarIds = JSON.parse(localStorage.getItem(RECENT_CARS_KEY)) || [];
+            recentCarIds = recentCarIds.filter(id => id !== selectedKey);
+            recentCarIds.unshift(selectedKey);
+            recentCarIds = recentCarIds.slice(0, 5);
+            localStorage.setItem(RECENT_CARS_KEY, JSON.stringify(recentCarIds));
+
+            calculate();
+        } else {
+            localStorage.removeItem(SELECTED_CAR_ID_KEY);
+            localStorage.removeItem(SELECTED_CAR_KEY);
+            document.getElementById('results').style.display = 'none';
+        }
+    }
+
+    function displayActiveCoeffs() {
+        const USER_COEFFS_KEY = 'custom_coeffs_list_user_' + CURRENT_USER_ID;
+        const savedData = localStorage.getItem(USER_COEFFS_KEY) || localStorage.getItem('custom_coeffs_list');
+        const customList = savedData ? JSON.parse(savedData) : [];
+
+        let activeHTML = [];
+        let baseSysK = 0;
+        let k4 = 0;
+        let k5 = 0;
+
+        customList.forEach(c => {
+            const val = parseFloat(c.val) || 0;
+
+            if (c.id === 'k4') k4 = val;
+            if (c.id === 'k5') k5 = val;
+
+            if (val > 0) {
+                if (c.type === 'minus') {
+                    activeHTML.push(`<span style="color: #ff7675;">➖ ${c.title}: -${val}%</span>`);
+                    if (c.id !== 'k5') baseSysK -= val;
+                } else {
+                    activeHTML.push(`<span style="color: #2ecc71;">➕ ${c.title}: +${val}%</span>`);
+                    if (c.id !== 'k4') baseSysK += val;
+                }
+            }
+        });
+
+        const activeContainer = document.getElementById('active_coeffs_list');
+        const sysKElem = document.getElementById('sys_k_val');
+
+        if (sysKElem) {
+            sysKElem.innerText = baseSysK.toFixed(1) + "%";
+        }
+
+        if (activeContainer) {
+            activeContainer.innerHTML = activeHTML.length > 0
+                ? activeHTML.join('<br>')
+                : "<i>Всі коефіцієнти 0% (не застосовано)</i>";
+        }
+
+        return { baseSysK, k4, k5 };
+    }
+
+    function toggleTopHwyBtn(btn) {
+        btn.classList.toggle('active');
+        const indkInput = document.getElementById('m_indk');
+        if (indkInput) {
+            if (btn.classList.contains('active')) {
+                indkInput.setAttribute('data-old-val', indkInput.value);
+                indkInput.value = 0;
+                indkInput.disabled = true;
+            } else {
+                indkInput.value = indkInput.getAttribute('data-old-val') || 0;
+                indkInput.disabled = false;
+            }
+        }
+    }
+
+    function addManualRow() {
+        const isHwy = document.getElementById('m_is_hwy').classList.contains('active');
+        const indKVal = isHwy ? 0 : (document.getElementById('m_indk').value || 0);
+
+        appendRow(
+            cleanEmoji(document.getElementById('m_name').value) || "Маршрут",
+            document.getElementById('m_dist').value || 0,
+            document.getElementById('m_cargo').value || "-",
+            document.getElementById('m_weight').value || 0,
+            indKVal,
+            isHwy
+        );
+
+        ['m_name','m_dist','m_cargo','m_weight','m_indk'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = (id === 'm_name') ? "" : (id === 'm_cargo' ? "-" : 0);
+            }
+        });
+
+        const topHwyBtn = document.getElementById('m_is_hwy');
+        if (topHwyBtn) topHwyBtn.classList.remove('active');
+        const indkInput = document.getElementById('m_indk');
+        if (indkInput) indkInput.disabled = false;
+
+        calculate();
+    }
+
+    function importFromMap(data) {
+        document.getElementById('city_rows').innerHTML = '';
+
+        if (Array.isArray(data)) {
+            data.forEach(item => {
+                let indK = 0;
+                let cleanRouteName = cleanEmoji(item.name || item.route || "");
+                let isHwy = item.isHighway || cleanRouteName.toLowerCase().includes("(траса)");
+
+                if (!isHwy) {
+                    const lowerRoute = cleanRouteName.toLowerCase();
+                    for (let cityName in userCityDb) {
+                        if (lowerRoute.includes(cityName)) {
+                            indK = userCityDb[cityName];
+                            break;
+                        }
+                    }
+                } else {
+                    indK = 0;
+                }
+
+                appendRow(cleanRouteName, item.km || item.dist || 0, "-", 0, indK, isHwy);
+            });
+        }
+        calculate();
+    }
+
+    function appendRow(route, dist, cargo, weight, indk, isHighway = false) {
+        const tbody = document.getElementById('city_rows');
+        const row = document.createElement('tr');
+        row.draggable = true;
+        const hwyClass = isHighway ? "btn-hwy active" : "btn-hwy";
+        const disabledAttr = isHighway ? "disabled" : "";
+        const actualIndK = isHighway ? 0 : indk;
+
+        row.innerHTML = `
+            <td><span class="drag-handle" title="Перетягніть для зміни порядку">⋮⋮</span></td>
+            <td><input type="text" value="${cleanEmoji(route)}"></td>
+            <td><input type="number" value="${dist}" oninput="calculate()"></td>
+            <td><input type="text" value="${cargo || '-'}"></td>
+            <td><input type="number" value="${weight}" oninput="calculate()"></td>
+            <td><input type="number" value="${actualIndK}" ${disabledAttr} style="color:#d35400 !important;" data-old-val="${indk}" oninput="calculate()"></td>
+            <td><button class="${hwyClass}" onclick="toggleRowHwyBtn(this)">Т</button></td>
+            <td style="white-space: nowrap;">
+                <button class="btn-row-action btn-row-copy" title="Копіювати рядок" onclick="duplicateRow(this)">📋</button>
+                <button class="btn-row-action btn-row-del" title="Видалити" onclick="this.parentElement.parentElement.remove(); calculate();">✕</button>
+            </td>
+        `;
+
+        setupDragAndDrop(row);
+        tbody.appendChild(row);
+    }
+
+    function toggleRowHwyBtn(btn) {
+        btn.classList.toggle('active');
+        const row = btn.closest('tr');
+        const indkInput = row.querySelectorAll('input')[4];
+        const isHwy = btn.classList.contains('active');
+
+        if (isHwy) {
+            indkInput.setAttribute('data-old-val', indkInput.value);
+            indkInput.value = 0;
+            indkInput.disabled = true;
+        } else {
+            indkInput.value = indkInput.getAttribute('data-old-val') || 0;
+            indkInput.disabled = false;
+        }
+        calculate();
+    }
+
+    function duplicateRow(btn) {
+        const currentRow = btn.closest('tr');
+        const ins = currentRow.querySelectorAll('input');
+        const hwyBtn = currentRow.querySelector('.btn-hwy');
+
+        const route = ins[0].value;
+        const dist = ins[1].value;
+        const cargo = ins[2].value;
+        const weight = ins[3].value;
+        const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
+        const indk = isHighway ? (ins[4].getAttribute('data-old-val') || 0) : ins[4].value;
+
+        appendRow(route, dist, cargo, weight, indk, isHighway);
+        calculate();
+    }
+
+    let dragSrcEl = null;
+
+    function setupDragAndDrop(row) {
+        row.addEventListener('dragstart', function(e) {
+            dragSrcEl = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        row.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        });
+
+        row.addEventListener('dragenter', function() {
+            this.style.background = "#e8f0fe";
+        });
+
+        row.addEventListener('dragleave', function() {
+            this.style.background = "";
+        });
+
+        row.addEventListener('drop', function(e) {
+            e.stopPropagation();
+            this.style.background = "";
+            if (dragSrcEl !== this) {
+                const tbody = document.getElementById('city_rows');
+                const rowsArr = Array.from(tbody.children);
+                const srcIdx = rowsArr.indexOf(dragSrcEl);
+                const targetIdx = rowsArr.indexOf(this);
+
+                if (srcIdx < targetIdx) {
+                    tbody.insertBefore(dragSrcEl, this.nextSibling);
+                } else {
+                    tbody.insertBefore(dragSrcEl, this);
+                }
+                calculate();
+            }
+        });
+
+        row.addEventListener('dragend', function() {
+            this.classList.remove('dragging');
+            document.querySelectorAll('#city_rows tr').forEach(r => r.style.background = "");
+        });
+    }
+
+    let trailerActive = false;
+
+    function toggleTrailer() {
+        const btn = document.getElementById('trailerBtn');
+        const container = document.getElementById('trailer_input_container');
+        trailerActive = !trailerActive;
+
+        if (trailerActive) {
+            btn.classList.add('active');
+            btn.innerText = "🚚 АВТОПОЇЗД: УВІМКН";
+            container.style.display = 'block';
+        } else {
+            btn.classList.remove('active');
+            btn.innerText = "🚚 АВТОПОЇЗД: ВИМКН";
+            container.style.display = 'none';
+            document.getElementById('g_trailler').value = 0;
+        }
+        calculate();
+    }
+
+    function calculate() {
+        const carSelect = document.getElementById('carSelect');
+        const car = JSON.parse(localStorage.getItem(SELECTED_CAR_KEY));
+
+        if (!carSelect.value || !car) {
+            document.getElementById('results').style.display = 'none';
+            return;
+        }
+
+        const { baseSysK, k4, k5 } = displayActiveCoeffs();
+        const gTrailler = trailerActive ? parseFloat(document.getElementById('g_trailler').value) || 0 : 0;
+        let totalQ = 0;
+
+        document.querySelectorAll('#city_rows tr').forEach(row => {
+            const ins = row.querySelectorAll('input');
+            const hwyBtn = row.querySelector('.btn-hwy');
+
+            const km = parseFloat(ins[1].value) || 0;
+            const w = parseFloat(ins[3].value) || 0;
+            const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
+
+            const indK = isHighway ? 0 : (parseFloat(ins[4].value) || 0);
+            const hwyK = isHighway ? (k4 - k5) : 0;
+            const finalK = baseSysK + indK + hwyK;
+
+            const workWeight = w + gTrailler;
+
+            totalQ += (0.01 * car.hsm * km * (1 + 0.01 * finalK)) + (0.01 * (car.hsz || 0) * workWeight * km);
+        });
+
+        const omRes = (totalQ * (car.om || 0) / 100);
+        const otRes = (totalQ * (car.ot || 0) / 100);
+        const osRes = (totalQ * (car.os || 0) / 100);
+        const opRes = (totalQ * (car.op || 0) / 100);
+
+        document.getElementById('r_q').innerText = totalQ.toFixed(2);
+        document.getElementById('r_om').innerText = omRes.toFixed(2);
+        document.getElementById('r_ot').innerText = otRes.toFixed(2);
+        document.getElementById('r_os').innerText = osRes.toFixed(2);
+        document.getElementById('r_op').innerText = opRes.toFixed(2);
+        document.getElementById('results').style.display = 'block';
+    }
+
+    function getCurrentRowsData() {
+        const rows = [];
+        document.querySelectorAll('#city_rows tr').forEach(row => {
+            const ins = row.querySelectorAll('input');
+            const hwyBtn = row.querySelector('.btn-hwy');
+            const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
+
+            rows.push({
+                route: cleanEmoji(ins[0].value),
+                dist: parseFloat(ins[1].value) || 0,
+                cargo: ins[2].value || "-",
+                weight: parseFloat(ins[3].value) || 0,
+                indK: isHighway ? (parseFloat(ins[4].getAttribute('data-old-val')) || 0) : (parseFloat(ins[4].value) || 0),
+                isHighway: isHighway
+            });
+        });
+        return rows;
+    }
+
+    function fetchCalculationsFromDB() {
+        const formData = new FormData();
+        formData.append('action', 'fetch_routes');
+
+        fetch('/api/map/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                const container = document.getElementById('calcArchiveList');
+                if (!container) return;
+                container.innerHTML = '';
+                loadedCalculations = {};
+
+                if (res.success && res.data && res.data.length > 0) {
+                    res.data.forEach(item => {
+                        loadedCalculations[item.id] = item;
+
+                        const li = document.createElement('li');
+                        li.className = 'calc-archive-item';
+                        const dateStr = item.created_at ? new Date(item.created_at).toLocaleString('uk-UA') : '';
+
+                        li.innerHTML = `
+                            <div>
+                                <strong>📍 ${cleanEmoji(item.route)}</strong>
+                                <br><small style="color:#bdc3c7;">🕒 ${dateStr} | Відст: ${item.distance} км | Витрата: <b style="color:#2ecc71;">${item.fuel_consumed || 0} л</b></small>
+                            </div>
+                            <div style="display:flex; gap:4px;">
+                                <button class="btn btn-blue" style="padding:4px 8px; font-size:10px; margin:0;" onclick="restoreCalculationToForm(${item.id})">📂 Відновити</button>
+                                <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteCalculationFromDB(${item.id})">🗑️</button>
+                            </div>
+                        `;
+                        container.appendChild(li);
+                    });
+                } else {
+                    container.innerHTML = `<li style="color: #aaa; font-size: 11px;">Немає збережених розрахунків у базі даних.</li>`;
+                }
+            })
+            .catch(err => console.error("Помилка завантаження архіву:", err));
+    }
+
+    function saveCalculationRecord() {
+        const rows = getCurrentRowsData();
+        const totalQ = parseFloat(document.getElementById('r_q').innerText) || 0;
+
+        if (rows.length === 0 && totalQ <= 0) {
+            alert("Спочатку додайте ділянки та виконайте розрахунок пального!");
+            return;
+        }
+
+        let defaultName = rows.length > 0 ? rows[0].route : 'Маршрут руху';
+        if (rows.length > 1) {
+            defaultName += ` та ще ${rows.length - 1} діл.`;
+        }
+
+        let customName = prompt("Введіть назву розрахунку:", defaultName);
+        if (customName === null) return;
+
+        customName = cleanEmoji(customName.trim()) || defaultName;
+
+        let totalDist = 0;
+        rows.forEach(r => totalDist += r.dist);
+
+        const formData = new FormData();
+        formData.append('action', 'save_route');
+        formData.append('name', customName);
+        formData.append('total_dist', totalDist);
+        formData.append('cities_json', JSON.stringify(rows));
+
+        fetch('/api/map/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success) {
+                    alert("Розрахунок успішно збережено!");
+                    fetchCalculationsFromDB();
+                } else {
+                    alert("Помилка збереження.");
+                }
+            })
+            .catch(err => alert("Помилка серверного запиту"));
+    }
+
+    function restoreCalculationToForm(id) {
+        const rec = loadedCalculations[id];
+        if (!rec) return;
+
+        if (confirm(`Відновити розрахунок "${rec.route}" у калькулятор?`)) {
+            document.getElementById('city_rows').innerHTML = '';
+            try {
+                const details = JSON.parse(rec.details || '[]');
+                if (Array.isArray(details)) {
+                    details.forEach(r => {
+                        appendRow(r.route, r.dist, r.cargo, r.weight, r.indK, r.isHighway);
+                    });
+                }
+            } catch (e) {
+                appendRow(rec.route, rec.distance, '-', 0, 0, false);
+            }
+            calculate();
+        }
+    }
+
+    function deleteCalculationFromDB(id) {
+        if (confirm("Видалити цей розрахунок?")) {
+            const formData = new FormData();
+            formData.append('action', 'delete_route');
+            formData.append('route_id', id);
+
+            fetch('/api/map/', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(res => {
+                    if (res.success) fetchCalculationsFromDB();
+                });
+        }
+    }
+
+    function saveForReport() {
+        const selectedKey = document.getElementById('carSelect').value;
+        const car = JSON.parse(localStorage.getItem(SELECTED_CAR_KEY));
+        if (!selectedKey || !car) { alert("Будь ласка, оберіть автомобіль!"); return; }
+
+        const { baseSysK, k4, k5 } = displayActiveCoeffs();
+        const USER_COEFFS_KEY = 'custom_coeffs_list_user_' + CURRENT_USER_ID;
+        const customList = JSON.parse(localStorage.getItem(USER_COEFFS_KEY) || localStorage.getItem('custom_coeffs_list')) || [];
+        let activeCoeffsList = [];
+
+        customList.forEach(c => {
+            const val = parseFloat(c.val) || 0;
+            if (val > 0) {
+                const prefix = c.type === 'minus' ? '-' : '+';
+                activeCoeffsList.push(`${c.title}: ${prefix}${val}%`);
+            }
+        });
+
+        let distCity = 0;
+        let distOut = 0;
+        let maxWeight = 0;
+        const rows = [];
+
+        document.querySelectorAll('#city_rows tr').forEach(row => {
+            const ins = row.querySelectorAll('input');
+            const hwyBtn = row.querySelector('.btn-hwy');
+
+            const route = cleanEmoji(ins[0].value);
+            const dist = parseFloat(ins[1].value) || 0;
+            const cargo = ins[2].value;
+            const weight = parseFloat(ins[3].value) || 0;
+            const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
+            const indK = isHighway ? 0 : (parseFloat(ins[4].value) || 0);
+
+            if (isHighway) {
+                distOut += dist;
+            } else {
+                distCity += dist;
+            }
+
+            maxWeight = Math.max(maxWeight, weight);
+            const rowSysK = isHighway ? (baseSysK + k4 - k5) : baseSysK;
+
+            rows.push({ route, dist, cargo, weight, indK, isHighway, rowSysK });
+        });
+
+        const totalQ = parseFloat(document.getElementById('r_q').innerText) || 0;
+
+        const reportData = {
+            carName: car.name,
+            car: car.name,
+            plate: car.plate || "Б/Н",
+            hsm: car.hsm,
+            hsz: car.hsz || 0,
+            om: car.om || 0,
+            ot: car.ot || 0,
+            os: car.os || 0,
+            op: car.op || 0,
+            sysK: baseSysK,
+            k4: k4,
+            k5: k5,
+            activeCoeffsList: activeCoeffsList,
+            distCity: distCity,
+            distOut: distOut,
+            weight: maxWeight,
+            totalFuel: totalQ,
+            rows: rows
+        };
+
+        localStorage.setItem('last_report_data', JSON.stringify(reportData));
+        window.open('{% url "preview" %}', '_blank');
+    }
+</script>
+
+</body>
+</html>

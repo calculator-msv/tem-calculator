@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система ТЕМ ДПСУ</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #1b3022;
+            color: white;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .card {
+            background: rgba(0,0,0,0.7);
+            padding: 30px;
+            border-radius: 10px;
+            width: 340px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h2 { margin-bottom: 15px; color: #2ecc71; }
+        .tabs { display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px solid #444; }
+        .tab-btn { background: none; border: none; color: #aaa; padding: 10px; cursor: pointer; font-size: 15px; width: 50%; font-weight: bold; }
+        .tab-btn.active { color: #2ecc71; border-bottom: 2px solid #2ecc71; }
+        .form-group { display: none; }
+        .form-group.active { display: block; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 6px 0;
+            box-sizing: border-box;
+            border-radius: 5px;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
+        }
+        button.action-btn {
+            width: 100%;
+            padding: 12px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+        button.action-btn:hover { background: #219150; }
+        .guest-btn {
+            background: #2980b9;
+            margin-top: 10px;
+            width: 100%;
+            padding: 12px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .guest-btn:hover { background: #1f6694; }
+        .alert-error { background: #e74c3c; color: white; padding: 10px; border-radius: 5px; font-size: 13px; margin-bottom: 12px; }
+
+        .user-header {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .menu-container {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 380px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .btn-menu {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: white;
+            padding: 16px 20px;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        .btn-calc { background: #27ae60; } .btn-calc:hover { background: #2ecc71; }
+        .btn-docs { background: #2980b9; } .btn-docs:hover { background: #3498db; }
+        .icon { margin-right: 15px; font-size: 20px; }
+    </style>
+</head>
+<body>
+
+{% if user.is_authenticated %}
+    <!-- ГОЛОВНЕ МЕНЮ (Прибрано Книгу обліку) -->
+    <div class="user-header">
+        <span>👤 <b>{{ user.first_name|default:user.username }}</b></span>
+        <a href="{% url 'logout' %}" class="logout-btn">Вийти</a>
+    </div>
+
+    <div class="menu-container">
+        <h1 style="color: #2ecc71; font-size: 20px; margin-bottom: 25px;">СИСТЕМА ОБЛІКУ ТЕМ</h1>
+
+        <a href="{% url 'calc' %}" class="btn-menu btn-calc">
+            <span class="icon">🧮</span> Калькулятор ПММ
+        </a>
+
+        <a href="{% url 'library' %}" class="btn-menu btn-docs">
+            <span class="icon">📚</span> Література та Нормативи
+        </a>
+    </div>
+
+{% else %}
+    <!-- ФОРМА ВХОДУ ТА РЕЄСТРАЦІЇ -->
+    <div class="card">
+        <h2>Система ТЕМ</h2>
+
+        {% if error_msg %}
+            <div class="alert-error">{{ error_msg }}</div>
+        {% endif %}
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('login')">ВХІД</button>
+            <button class="tab-btn" onclick="switchTab('register')">РЕЄСТРАЦІЯ</button>
+        </div>
+
+        <form id="login-form" class="form-group active" method="POST" action="{% url 'index' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="login">
+            <input type="email" name="email" placeholder="Email (Електронна пошта)" required>
+            <input type="password" name="password" placeholder="Пароль" required>
+            <button type="submit" class="action-btn">УВІЙТИ</button>
+        </form>
+
+        <form id="register-form" class="form-group" method="POST" action="{% url 'index' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="register">
+            <input type="text" name="fullname" placeholder="ПІБ або Підрозділ" required>
+            <input type="email" name="email" placeholder="Email (Електронна пошта)" required>
+            <input type="password" name="password" placeholder="Пароль (від 6 символів)" required>
+            <button type="submit" class="action-btn">ЗАРЕЄСТРУВАТИСЯ</button>
+        </form>
+
+        <form method="POST" action="{% url 'index' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="guest">
+            <button type="submit" class="guest-btn">УВІЙТИ ЯК ГІСТЬ</button>
+        </form>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.form-group').forEach(form => form.classList.remove('active'));
+
+            if (tab === 'login') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('login-form').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('register-form').classList.add('active');
+            }
+        }
+    </script>
+{% endif %}
+
+</body>
+</html>
