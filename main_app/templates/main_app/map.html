@@ -24,7 +24,6 @@
         .btn-save { background: #3498db; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; }
         .city-item { display: flex; justify-content: space-between; padding: 8px; margin-bottom: 5px; border-left: 6px solid #ccc; background: #f1f3f4; font-size: 12px; font-weight: bold; border-radius: 0 4px 4px 0; }
 
-        /* КОМПАКТНІ КАРТКИ МАРШРУТІВ */
         .route-card {
             background: #f8f9fa;
             border: 1px solid #ddd;
@@ -417,7 +416,7 @@
         const formData = new FormData();
         formData.append('action', 'save_route');
         formData.append('name', name);
-        formData.append('total_dist', document.getElementById('total-val').innerText);
+        formData.append('total_dist', document.getElementById('total-val').innerText.replace(' км', ''));
         formData.append('cities_json', JSON.stringify(currentCityData));
         formData.append('segments_json', JSON.stringify(routeSegments));
         formData.append('image_data', imgData);
@@ -450,21 +449,37 @@
 
     function selectRoute(i) {
         if (!dbRoutesList[i]) return;
+        const selectedRoute = dbRoutesList[i];
+        
         try {
-            currentCityData = JSON.parse(dbRoutesList[i].details || dbRoutesList[i].cities_json || '{}');
-            routeSegments = JSON.parse(dbRoutesList[i].segments_json || '[]');
-        } catch(e){}
-        document.getElementById('status').innerText = "📍 Обрано: " + cleanEmoji(dbRoutesList[i].route || dbRoutesList[i].name);
+            currentCityData = JSON.parse(selectedRoute.cities_json || selectedRoute.details || '{}');
+            routeSegments = JSON.parse(selectedRoute.segments_json || '[]');
+        } catch(e) {
+            currentCityData = {};
+            routeSegments = [];
+        }
+
+        const totalKm = parseFloat(selectedRoute.total_dist || selectedRoute.distance || 0).toFixed(1);
+        document.getElementById('total-val').innerText = totalKm + " км";
+
+        // Відображаємо інформацію про розбиття по місту/трасі у бічній панелі
+        const list = document.getElementById('city-list');
+        list.innerHTML = "";
+        for (let loc in currentCityData) {
+            const km = parseFloat(currentCityData[loc]).toFixed(1);
+            if (km < 0.1) continue;
+            list.innerHTML += `<div class="city-item" style="border-left-color: ${cityColorMap[loc] || '#7f8c8d'}">
+                <span>${cleanEmoji(loc)}</span><span>${km} км</span>
+            </div>`;
+        }
+
+        document.getElementById('status').innerText = "📍 Обрано збережений маршрут: " + cleanEmoji(selectedRoute.name || selectedRoute.route);
     }
 
     function transferData() {
-        if (routeSegments.length === 0 && Object.keys(currentCityData).length === 0) {
-            return alert("Побудуйте або оберіть маршрут зі списку!");
-        }
-
         const formattedRows = [];
 
-        if (routeSegments.length > 0) {
+        if (routeSegments && routeSegments.length > 0) {
             for (let i = 0; i < routeSegments.length; i++) {
                 const seg = routeSegments[i];
                 const currentLoc = cleanEmoji(seg.loc);
@@ -494,6 +509,22 @@
 
                 formattedRows.push({ name: routeName, km: km, isHighway: isHwy });
             }
+        } else if (currentCityData && Object.keys(currentCityData).length > 0) {
+            // Резервний варіант для збережених маршрутів, у яких є лише currentCityData
+            for (let loc in currentCityData) {
+                const currentLoc = cleanEmoji(loc);
+                const km = parseFloat(currentCityData[loc]).toFixed(1);
+                if (parseFloat(km) < 0.1) continue;
+
+                let isHwy = (currentLoc === "Траса");
+                let routeName = isHwy ? "Автомобільна дорога (Траса)" : `м. ${currentLoc}`;
+
+                formattedRows.push({ name: routeName, km: km, isHighway: isHwy });
+            }
+        }
+
+        if (formattedRows.length === 0) {
+            return alert("Побудуйте або оберіть маршрут зі списку!");
         }
 
         localStorage.setItem('map_to_calc_detailed', JSON.stringify(formattedRows));
