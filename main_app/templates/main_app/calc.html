@@ -63,7 +63,6 @@
 <body onfocus="syncData()">
 
 <div class="side-panel">
-    <!-- БЛОК ПОТОЧНОГО АКАУНТА -->
     <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.15); font-size: 12px;">
         <div style="color: #bdc3c7; font-weight: bold; font-size: 10px; text-transform: uppercase;">👤 ПОТОЧНИЙ АКАУНТ:</div>
         <div style="color: #2ecc71; font-weight: bold; font-size: 14px; margin-top: 3px; word-break: break-all;">
@@ -214,12 +213,6 @@
         window.open('{% url "map" %}', '_blank');
     }
 
-    function loadRouteFromMap(mapData) {
-        if (mapData) {
-            importFromMap(mapData);
-        }
-    }
-
     function syncData() {
         updateCarList();
         displayActiveCoeffs();
@@ -280,14 +273,6 @@
             }
         });
 
-        if (currentSelectedId && !activeFound && cars[currentSelectedId]) {
-            validRecentIds.unshift(currentSelectedId);
-            validRecentIds = validRecentIds.slice(0, 5);
-            localStorage.setItem(RECENT_CARS_KEY, JSON.stringify(validRecentIds));
-            updateCarList();
-            return;
-        }
-
         if (!activeFound) {
             select.value = "";
             document.getElementById('results').style.display = 'none';
@@ -305,6 +290,8 @@
 
             localStorage.setItem(SELECTED_CAR_KEY, JSON.stringify(car));
             localStorage.setItem(SELECTED_CAR_ID_KEY, selectedKey);
+            localStorage.setItem('book_car_title', car.name);
+            localStorage.setItem('book_car_plate', car.plate || "Б/Н");
 
             let recentCarIds = JSON.parse(localStorage.getItem(RECENT_CARS_KEY)) || [];
             recentCarIds = recentCarIds.filter(id => id !== selectedKey);
@@ -332,7 +319,6 @@
 
         customList.forEach(c => {
             const val = parseFloat(c.val) || 0;
-
             if (c.id === 'k4') k4 = val;
             if (c.id === 'k5') k5 = val;
 
@@ -350,212 +336,10 @@
         const activeContainer = document.getElementById('active_coeffs_list');
         const sysKElem = document.getElementById('sys_k_val');
 
-        if (sysKElem) {
-            sysKElem.innerText = baseSysK.toFixed(1) + "%";
-        }
-
-        if (activeContainer) {
-            activeContainer.innerHTML = activeHTML.length > 0
-                ? activeHTML.join('<br>')
-                : "<i>Всі коефіцієнти 0% (не застосовано)</i>";
-        }
+        if (sysKElem) sysKElem.innerText = baseSysK.toFixed(1) + "%";
+        if (activeContainer) activeContainer.innerHTML = activeHTML.length > 0 ? activeHTML.join('<br>') : "<i>Всі коефіцієнти 0% (не застосовано)</i>";
 
         return { baseSysK, k4, k5 };
-    }
-
-    function toggleTopHwyBtn(btn) {
-        btn.classList.toggle('active');
-        const indkInput = document.getElementById('m_indk');
-        if (indkInput) {
-            if (btn.classList.contains('active')) {
-                indkInput.setAttribute('data-old-val', indkInput.value);
-                indkInput.value = 0;
-                indkInput.disabled = true;
-            } else {
-                indkInput.value = indkInput.getAttribute('data-old-val') || 0;
-                indkInput.disabled = false;
-            }
-        }
-    }
-
-    function addManualRow() {
-        const isHwy = document.getElementById('m_is_hwy').classList.contains('active');
-        const indKVal = isHwy ? 0 : (document.getElementById('m_indk').value || 0);
-
-        appendRow(
-            cleanEmoji(document.getElementById('m_name').value) || "Маршрут",
-            document.getElementById('m_dist').value || 0,
-            document.getElementById('m_cargo').value || "-",
-            document.getElementById('m_weight').value || 0,
-            indKVal,
-            isHwy
-        );
-
-        ['m_name','m_dist','m_cargo','m_weight','m_indk'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.value = (id === 'm_name') ? "" : (id === 'm_cargo' ? "-" : 0);
-            }
-        });
-
-        const topHwyBtn = document.getElementById('m_is_hwy');
-        if (topHwyBtn) topHwyBtn.classList.remove('active');
-        const indkInput = document.getElementById('m_indk');
-        if (indkInput) indkInput.disabled = false;
-
-        calculate();
-    }
-
-    function importFromMap(data) {
-        document.getElementById('city_rows').innerHTML = '';
-
-        if (Array.isArray(data)) {
-            data.forEach(item => {
-                let indK = 0;
-                let cleanRouteName = cleanEmoji(item.name || item.route || "");
-                let isHwy = item.isHighway || cleanRouteName.toLowerCase().includes("(траса)");
-
-                if (!isHwy) {
-                    const lowerRoute = cleanRouteName.toLowerCase();
-                    for (let cityName in userCityDb) {
-                        if (lowerRoute.includes(cityName)) {
-                            indK = userCityDb[cityName];
-                            break;
-                        }
-                    }
-                } else {
-                    indK = 0;
-                }
-
-                appendRow(cleanRouteName, item.km || item.dist || 0, "-", 0, indK, isHwy);
-            });
-        }
-        calculate();
-    }
-
-    function appendRow(route, dist, cargo, weight, indk, isHighway = false) {
-        const tbody = document.getElementById('city_rows');
-        const row = document.createElement('tr');
-        row.draggable = true;
-        const hwyClass = isHighway ? "btn-hwy active" : "btn-hwy";
-        const disabledAttr = isHighway ? "disabled" : "";
-        const actualIndK = isHighway ? 0 : indk;
-
-        row.innerHTML = `
-            <td><span class="drag-handle" title="Перетягніть для зміни порядку">⋮⋮</span></td>
-            <td><input type="text" value="${cleanEmoji(route)}"></td>
-            <td><input type="number" value="${dist}" oninput="calculate()"></td>
-            <td><input type="text" value="${cargo || '-'}"></td>
-            <td><input type="number" value="${weight}" oninput="calculate()"></td>
-            <td><input type="number" value="${actualIndK}" ${disabledAttr} style="color:#d35400 !important;" data-old-val="${indk}" oninput="calculate()"></td>
-            <td><button class="${hwyClass}" onclick="toggleRowHwyBtn(this)">Т</button></td>
-            <td style="white-space: nowrap;">
-                <button class="btn-row-action btn-row-copy" title="Копіювати рядок" onclick="duplicateRow(this)">📋</button>
-                <button class="btn-row-action btn-row-del" title="Видалити" onclick="this.parentElement.parentElement.remove(); calculate();">✕</button>
-            </td>
-        `;
-
-        setupDragAndDrop(row);
-        tbody.appendChild(row);
-    }
-
-    function toggleRowHwyBtn(btn) {
-        btn.classList.toggle('active');
-        const row = btn.closest('tr');
-        const indkInput = row.querySelectorAll('input')[4];
-        const isHwy = btn.classList.contains('active');
-
-        if (isHwy) {
-            indkInput.setAttribute('data-old-val', indkInput.value);
-            indkInput.value = 0;
-            indkInput.disabled = true;
-        } else {
-            indkInput.value = indkInput.getAttribute('data-old-val') || 0;
-            indkInput.disabled = false;
-        }
-        calculate();
-    }
-
-    function duplicateRow(btn) {
-        const currentRow = btn.closest('tr');
-        const ins = currentRow.querySelectorAll('input');
-        const hwyBtn = currentRow.querySelector('.btn-hwy');
-
-        const route = ins[0].value;
-        const dist = ins[1].value;
-        const cargo = ins[2].value;
-        const weight = ins[3].value;
-        const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
-        const indk = isHighway ? (ins[4].getAttribute('data-old-val') || 0) : ins[4].value;
-
-        appendRow(route, dist, cargo, weight, indk, isHighway);
-        calculate();
-    }
-
-    let dragSrcEl = null;
-
-    function setupDragAndDrop(row) {
-        row.addEventListener('dragstart', function(e) {
-            dragSrcEl = this;
-            this.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        });
-
-        row.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-        });
-
-        row.addEventListener('dragenter', function() {
-            this.style.background = "#e8f0fe";
-        });
-
-        row.addEventListener('dragleave', function() {
-            this.style.background = "";
-        });
-
-        row.addEventListener('drop', function(e) {
-            e.stopPropagation();
-            this.style.background = "";
-            if (dragSrcEl !== this) {
-                const tbody = document.getElementById('city_rows');
-                const rowsArr = Array.from(tbody.children);
-                const srcIdx = rowsArr.indexOf(dragSrcEl);
-                const targetIdx = rowsArr.indexOf(this);
-
-                if (srcIdx < targetIdx) {
-                    tbody.insertBefore(dragSrcEl, this.nextSibling);
-                } else {
-                    tbody.insertBefore(dragSrcEl, this);
-                }
-                calculate();
-            }
-        });
-
-        row.addEventListener('dragend', function() {
-            this.classList.remove('dragging');
-            document.querySelectorAll('#city_rows tr').forEach(r => r.style.background = "");
-        });
-    }
-
-    let trailerActive = false;
-
-    function toggleTrailer() {
-        const btn = document.getElementById('trailerBtn');
-        const container = document.getElementById('trailer_input_container');
-        trailerActive = !trailerActive;
-
-        if (trailerActive) {
-            btn.classList.add('active');
-            btn.innerText = "🚚 АВТОПОЇЗД: УВІМКН";
-            container.style.display = 'block';
-        } else {
-            btn.classList.remove('active');
-            btn.innerText = "🚚 АВТОПОЇЗД: ВИМКН";
-            container.style.display = 'none';
-            document.getElementById('g_trailler').value = 0;
-        }
-        calculate();
     }
 
     function calculate() {
@@ -584,7 +368,6 @@
             const finalK = baseSysK + indK + hwyK;
 
             const workWeight = w + gTrailler;
-
             totalQ += (0.01 * car.hsm * km * (1 + 0.01 * finalK)) + (0.01 * (car.hsz || 0) * workWeight * km);
         });
 
@@ -599,211 +382,29 @@
         document.getElementById('r_os').innerText = osRes.toFixed(2);
         document.getElementById('r_op').innerText = opRes.toFixed(2);
         document.getElementById('results').style.display = 'block';
-    }
 
-    function getCurrentRowsData() {
-        const rows = [];
-        document.querySelectorAll('#city_rows tr').forEach(row => {
-            const ins = row.querySelectorAll('input');
-            const hwyBtn = row.querySelector('.btn-hwy');
-            const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
-
-            rows.push({
-                route: cleanEmoji(ins[0].value),
-                dist: parseFloat(ins[1].value) || 0,
-                cargo: ins[2].value || "-",
-                weight: parseFloat(ins[3].value) || 0,
-                indK: isHighway ? (parseFloat(ins[4].getAttribute('data-old-val')) || 0) : (parseFloat(ins[4].value) || 0),
-                isHighway: isHighway
-            });
-        });
-        return rows;
-    }
-
-    function fetchCalculationsFromDB() {
-        const formData = new FormData();
-        formData.append('action', 'fetch_routes');
-
-        fetch('/api/map/', { method: 'POST', body: formData })
-            .then(res => res.json())
-            .then(res => {
-                const container = document.getElementById('calcArchiveList');
-                if (!container) return;
-                container.innerHTML = '';
-                loadedCalculations = {};
-
-                if (res.success && res.data && res.data.length > 0) {
-                    res.data.forEach(item => {
-                        loadedCalculations[item.id] = item;
-
-                        const li = document.createElement('li');
-                        li.className = 'calc-archive-item';
-                        const dateStr = item.created_at ? new Date(item.created_at).toLocaleString('uk-UA') : '';
-
-                        li.innerHTML = `
-                            <div>
-                                <strong>📍 ${cleanEmoji(item.route)}</strong>
-                                <br><small style="color:#bdc3c7;">🕒 ${dateStr} | Відст: ${item.distance} км | Витрата: <b style="color:#2ecc71;">${item.fuel_consumed || 0} л</b></small>
-                            </div>
-                            <div style="display:flex; gap:4px;">
-                                <button class="btn btn-blue" style="padding:4px 8px; font-size:10px; margin:0;" onclick="restoreCalculationToForm(${item.id})">📂 Відновити</button>
-                                <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteCalculationFromDB(${item.id})">🗑️</button>
-                            </div>
-                        `;
-                        container.appendChild(li);
-                    });
-                } else {
-                    container.innerHTML = `<li style="color: #aaa; font-size: 11px;">Немає збережених розрахунків у базі даних.</li>`;
-                }
-            })
-            .catch(err => console.error("Помилка завантаження архіву:", err));
-    }
-
-    function saveCalculationRecord() {
-        const rows = getCurrentRowsData();
-        const totalQ = parseFloat(document.getElementById('r_q').innerText) || 0;
-
-        if (rows.length === 0 && totalQ <= 0) {
-            alert("Спочатку додайте ділянки та виконайте розрахунок пального!");
-            return;
-        }
-
-        let defaultName = rows.length > 0 ? rows[0].route : 'Маршрут руху';
-        if (rows.length > 1) {
-            defaultName += ` та ще ${rows.length - 1} діл.`;
-        }
-
-        let customName = prompt("Введіть назву розрахунку:", defaultName);
-        if (customName === null) return;
-
-        customName = cleanEmoji(customName.trim()) || defaultName;
-
-        let totalDist = 0;
-        rows.forEach(r => totalDist += r.dist);
-
-        const formData = new FormData();
-        formData.append('action', 'save_route');
-        formData.append('name', customName);
-        formData.append('total_dist', totalDist);
-        formData.append('cities_json', JSON.stringify(rows));
-
-        fetch('/api/map/', { method: 'POST', body: formData })
-            .then(res => res.json())
-            .then(res => {
-                if (res.success) {
-                    alert("Розрахунок успішно збережено!");
-                    fetchCalculationsFromDB();
-                } else {
-                    alert("Помилка збереження.");
-                }
-            })
-            .catch(err => alert("Помилка серверного запиту"));
-    }
-
-    function restoreCalculationToForm(id) {
-        const rec = loadedCalculations[id];
-        if (!rec) return;
-
-        if (confirm(`Відновити розрахунок "${rec.route}" у калькулятор?`)) {
-            document.getElementById('city_rows').innerHTML = '';
-            try {
-                const details = JSON.parse(rec.details || '[]');
-                if (Array.isArray(details)) {
-                    details.forEach(r => {
-                        appendRow(r.route, r.dist, r.cargo, r.weight, r.indK, r.isHighway);
-                    });
-                }
-            } catch (e) {
-                appendRow(rec.route, rec.distance, '-', 0, 0, false);
-            }
-            calculate();
-        }
-    }
-
-    function deleteCalculationFromDB(id) {
-        if (confirm("Видалити цей розрахунок?")) {
-            const formData = new FormData();
-            formData.append('action', 'delete_route');
-            formData.append('route_id', id);
-
-            fetch('/api/map/', { method: 'POST', body: formData })
-                .then(res => res.json())
-                .then(res => {
-                    if (res.success) fetchCalculationsFromDB();
-                });
-        }
+        // Зберігаємо дані розрахунку для книги
+        const waybillData = {
+            date: new Date().toLocaleDateString('uk-UA'),
+            docNum: '', // Перше поле порожнє
+            distTotal: (parseFloat(document.getElementById('m_dist')?.value) || 0).toString(),
+            cargoName: document.getElementById('m_cargo')?.value || 'Вантаж',
+            weight: document.getElementById('m_weight')?.value || '0',
+            fuelNorm: totalQ.toFixed(2),
+            fuelFact: totalQ.toFixed(2),
+            oilFactDetails: `M:${omRes.toFixed(2)}л, T:${otRes.toFixed(2)}л`,
+            oilNormDetails: `M:${omRes.toFixed(2)}л, T:${otRes.toFixed(2)}л`
+        };
+        localStorage.setItem('last_waybill_data', JSON.stringify(waybillData));
     }
 
     function saveForReport() {
-        const selectedKey = document.getElementById('carSelect').value;
         const car = JSON.parse(localStorage.getItem(SELECTED_CAR_KEY));
-        if (!selectedKey || !car) { alert("Будь ласка, оберіть автомобіль!"); return; }
+        if (!car) { alert("Будь ласка, оберіть автомобіль!"); return; }
 
-        const { baseSysK, k4, k5 } = displayActiveCoeffs();
-        const USER_COEFFS_KEY = 'custom_coeffs_list_user_' + CURRENT_USER_ID;
-        const customList = JSON.parse(localStorage.getItem(USER_COEFFS_KEY) || localStorage.getItem('custom_coeffs_list')) || [];
-        let activeCoeffsList = [];
+        localStorage.setItem('book_car_title', car.name);
+        localStorage.setItem('book_car_plate', car.plate || "Б/Н");
 
-        customList.forEach(c => {
-            const val = parseFloat(c.val) || 0;
-            if (val > 0) {
-                const prefix = c.type === 'minus' ? '-' : '+';
-                activeCoeffsList.push(`${c.title}: ${prefix}${val}%`);
-            }
-        });
-
-        let distCity = 0;
-        let distOut = 0;
-        let maxWeight = 0;
-        const rows = [];
-
-        document.querySelectorAll('#city_rows tr').forEach(row => {
-            const ins = row.querySelectorAll('input');
-            const hwyBtn = row.querySelector('.btn-hwy');
-
-            const route = cleanEmoji(ins[0].value);
-            const dist = parseFloat(ins[1].value) || 0;
-            const cargo = ins[2].value;
-            const weight = parseFloat(ins[3].value) || 0;
-            const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
-            const indK = isHighway ? 0 : (parseFloat(ins[4].value) || 0);
-
-            if (isHighway) {
-                distOut += dist;
-            } else {
-                distCity += dist;
-            }
-
-            maxWeight = Math.max(maxWeight, weight);
-            const rowSysK = isHighway ? (baseSysK + k4 - k5) : baseSysK;
-
-            rows.push({ route, dist, cargo, weight, indK, isHighway, rowSysK });
-        });
-
-        const totalQ = parseFloat(document.getElementById('r_q').innerText) || 0;
-
-        const reportData = {
-            carName: car.name,
-            car: car.name,
-            plate: car.plate || "Б/Н",
-            hsm: car.hsm,
-            hsz: car.hsz || 0,
-            om: car.om || 0,
-            ot: car.ot || 0,
-            os: car.os || 0,
-            op: car.op || 0,
-            sysK: baseSysK,
-            k4: k4,
-            k5: k5,
-            activeCoeffsList: activeCoeffsList,
-            distCity: distCity,
-            distOut: distOut,
-            weight: maxWeight,
-            totalFuel: totalQ,
-            rows: rows
-        };
-
-        localStorage.setItem('last_report_data', JSON.stringify(reportData));
         window.open('{% url "preview" %}', '_blank');
     }
 </script>
