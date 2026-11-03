@@ -176,10 +176,29 @@
     let loadedDbBooks = {};
 
     window.onload = function() {
+        syncHeaderInfo();
         renderTable();
         fetchArchivesFromDB();
         setupHeaderListeners();
     };
+
+    function syncHeaderInfo() {
+        // Отримуємо дані з усіх можливих джерел (звіт, калькулятор, localStorage)
+        const lastReport = JSON.parse(localStorage.getItem('last_report_data') || '{}');
+        const lastCalc = JSON.parse(localStorage.getItem('last_waybill_data') || '{}');
+        
+        let title = localStorage.getItem('book_car_title') || lastReport.carName || lastReport.car || lastCalc.carName || '-';
+        let plate = localStorage.getItem('book_car_plate') || lastReport.plate || lastCalc.plate || '-';
+        let fuel = localStorage.getItem('book_fuel_type') || lastReport.fuelType || '-';
+        let oil = localStorage.getItem('book_oil_type') || lastReport.oilType || '-';
+
+        if (title !== '-') document.getElementById('car_title_display').innerHTML = title;
+        if (plate !== '-') document.getElementById('car_plate_display').innerText = plate;
+        if (fuel !== '-') document.getElementById('fuel_type_display').innerText = fuel;
+        if (oil !== '-') document.getElementById('oil_type_display').innerText = oil;
+        
+        saveHeaderInfo();
+    }
 
     function setupHeaderListeners() {
         document.getElementById('car_title_display').addEventListener('blur', saveHeaderInfo);
@@ -198,11 +217,21 @@
     // --- ПЕРЕНОС ДАНИХ З ДОРОЖНЬОГО ЛИСТА (КАЛЬКУЛЯТОРА) ---
     function addFromDL() {
         const lastCalc = JSON.parse(localStorage.getItem('last_waybill_data') || '{}');
-        
+        const lastReport = JSON.parse(localStorage.getItem('last_report_data') || '{}');
+
         if (!lastCalc || !lastCalc.distTotal) {
             alert("Не знайдено останнього розрахунку! Спочатку виконайте розрахунок у Калькуляторі ПММ.");
             return;
         }
+
+        // Автоматично оновлюємо інформацію про ТЗ у шапці книги
+        if (lastReport.carName || lastReport.car) {
+            document.getElementById('car_title_display').innerHTML = lastReport.carName || lastReport.car;
+        }
+        if (lastReport.plate) {
+            document.getElementById('car_plate_display').innerText = lastReport.plate;
+        }
+        saveHeaderInfo();
 
         const newEntry = {
             date: lastCalc.date || new Date().toLocaleDateString('uk-UA'),
@@ -242,16 +271,6 @@
     function renderTable() {
         const tbody = document.getElementById('bookBody');
         tbody.innerHTML = '';
-
-        const savedTitle = localStorage.getItem('book_car_title');
-        const savedPlate = localStorage.getItem('book_car_plate');
-        const savedFuel = localStorage.getItem('book_fuel_type');
-        const savedOil = localStorage.getItem('book_oil_type');
-
-        if (savedTitle) document.getElementById('car_title_display').innerHTML = savedTitle;
-        if (savedPlate) document.getElementById('car_plate_display').innerText = savedPlate;
-        if (savedFuel) document.getElementById('fuel_type_display').innerText = savedFuel;
-        if (savedOil) document.getElementById('oil_type_display').innerText = savedOil;
 
         if (currentEntries.length === 0) {
             tbody.innerHTML = `<tr><td colspan="28" style="padding:12px; color:#777; text-align:center;">Книга порожня. Натисніть "Додати з Дорожнього листа".</td></tr>`;
