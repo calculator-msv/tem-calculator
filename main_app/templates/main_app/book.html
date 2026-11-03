@@ -32,7 +32,8 @@
         .v-box { height: 125px; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
         .v-text { writing-mode: vertical-rl; transform: rotate(180deg); white-space: normal; font-size: 9.5pt; line-height: 0.95; padding: 1px; text-align: center; max-height: 120px; }
         .oil-sub { font-size: 7.5pt; line-height: 0.85; display: block; margin-top: 1px; }
-        .eff-badge { display: inline-block; background: #e1f5fe; color: #0277bd; padding: 1px 2px; border-radius: 2px; cursor: pointer; font-weight: bold; border: 1px solid #81d4fa; font-size: 9.5pt; }
+        .eff-badge { display: inline-block; background: #e1f5fe; color: #0277bd; padding: 1px 3px; border-radius: 3px; cursor: pointer; font-weight: bold; border: 1px solid #81d4fa; font-size: 9.5pt; transition: 0.2s; }
+        .eff-badge:hover { background: #b3e5fc; border-color: #0288d1; }
         .col-numbers { background: #f2f2f2; font-weight: bold; font-size: 8.5pt !important; }
         .col-numbers td { font-size: 8.5pt !important; }
 
@@ -172,33 +173,15 @@
 </div>
 
 <script>
+    const CURRENT_USER_ID = "{{ user.id|default:0 }}";
     let currentEntries = JSON.parse(localStorage.getItem('book_entries')) || [];
     let loadedDbBooks = {};
 
     window.onload = function() {
-        syncHeaderInfo();
         renderTable();
         fetchArchivesFromDB();
         setupHeaderListeners();
     };
-
-    function syncHeaderInfo() {
-        // Отримуємо дані з усіх можливих джерел (звіт, калькулятор, localStorage)
-        const lastReport = JSON.parse(localStorage.getItem('last_report_data') || '{}');
-        const lastCalc = JSON.parse(localStorage.getItem('last_waybill_data') || '{}');
-        
-        let title = localStorage.getItem('book_car_title') || lastReport.carName || lastReport.car || lastCalc.carName || '-';
-        let plate = localStorage.getItem('book_car_plate') || lastReport.plate || lastCalc.plate || '-';
-        let fuel = localStorage.getItem('book_fuel_type') || lastReport.fuelType || '-';
-        let oil = localStorage.getItem('book_oil_type') || lastReport.oilType || '-';
-
-        if (title !== '-') document.getElementById('car_title_display').innerHTML = title;
-        if (plate !== '-') document.getElementById('car_plate_display').innerText = plate;
-        if (fuel !== '-') document.getElementById('fuel_type_display').innerText = fuel;
-        if (oil !== '-') document.getElementById('oil_type_display').innerText = oil;
-        
-        saveHeaderInfo();
-    }
 
     function setupHeaderListeners() {
         document.getElementById('car_title_display').addEventListener('blur', saveHeaderInfo);
@@ -214,24 +197,75 @@
         localStorage.setItem('book_oil_type', document.getElementById('oil_type_display').innerText.trim());
     }
 
+    // --- МОДУЛЬ ОБЧИСЛЕННЯ КОЕФІЦІЄНТА ЕФЕКТИВНОСТІ (Кф) ---
+    function getMaxPayload() {
+        const selectedCar = JSON.parse(localStorage.getItem('selectedCar_user_' + CURRENT_USER_ID) || '{}');
+        if (selectedCar && selectedCar.max_payload) {
+            return parseFloat(selectedCar.max_payload) || 4.5;
+        }
+        const cars = JSON.parse(localStorage.getItem('cars_user_' + CURRENT_USER_ID) || '{}');
+        for (let id in cars) {
+            if (cars[id] && cars[id].max_payload) {
+                return parseFloat(cars[id].max_payload);
+            }
+        }
+        return 4.5; // Базове значення за замовчуванням (т)
+    }
+
+    function calcEffValue(distCargo, distTotal, weightFact, weightMax) {
+        const sCargo = parseFloat(distCargo) || 0;
+        const sTotal = parseFloat(distTotal) || 0;
+        const mFact = parseFloat(weightFact) || 0;
+        const mMax = parseFloat(weightMax) || 0;
+
+        if (sTotal <= 0 || mMax <= 0) return 0;
+
+        const k1 = sCargo / sTotal;
+        const k2 = mFact / mMax;
+        const eff = (k1 * k2) * 100;
+
+        return eff.toFixed(1);
+    }
+
+    function showEffFormula(idx) {
+        const entry = currentEntries[idx];
+        if (!entry) return;
+
+        const sCargo = parseFloat(entry.distCargo) || 0;
+        const sTotal = parseFloat(entry.distTotal) || 0;
+        const mFact = parseFloat(entry.weight) || 0;
+        const mMax = getMaxPayload();
+
+        const k1 = sTotal > 0 ? (sCargo / sTotal) : 0;
+        const k2 = mMax > 0 ? (mFact / mMax) : 0;
+        const effResult = (k1 * k2 * 100).toFixed(1);
+
+        const message = `🧮 ФОРМУЛА РОЗРАХУНКУ КОЕФІЦІЄНТА ЕФЕКТИВНОСТІ (Кф):\n\n` +
+            `Кф = (Sвантаж / Sзаг) * (mфакт / mмакс) * 100%\n\n` +
+            `Вихідні дані розрахунку:\n` +
+            `• Sвантаж (пробіг з вантажем): ${sCargo} км\n` +
+            `• Sзаг (загальний пробіг): ${sTotal} км\n` +
+            `• mфакт (вага вантажу): ${mFact} т\n` +
+            `• mмакс (макс. вантажопідйомність ТЗ): ${mMax} т\n\n` +
+            `Покрокове обчислення:\n` +
+            `1) Кф1 (пробіг) = ${sCargo} / ${sTotal} = ${k1.toFixed(3)}\n` +
+            `2) Кф2 (вантаж) = ${mFact} / ${mMax} = ${k2.toFixed(3)}\n` +
+            `3) Кф = (${k1.toFixed(3)} * ${k2.toFixed(3)}) * 100% = ${effResult}%`;
+
+        alert(message);
+    }
+
     // --- ПЕРЕНОС ДАНИХ З ДОРОЖНЬОГО ЛИСТА (КАЛЬКУЛЯТОРА) ---
     function addFromDL() {
         const lastCalc = JSON.parse(localStorage.getItem('last_waybill_data') || '{}');
-        const lastReport = JSON.parse(localStorage.getItem('last_report_data') || '{}');
-
+        
         if (!lastCalc || !lastCalc.distTotal) {
             alert("Не знайдено останнього розрахунку! Спочатку виконайте розрахунок у Калькуляторі ПММ.");
             return;
         }
 
-        // Автоматично оновлюємо інформацію про ТЗ у шапці книги
-        if (lastReport.carName || lastReport.car) {
-            document.getElementById('car_title_display').innerHTML = lastReport.carName || lastReport.car;
-        }
-        if (lastReport.plate) {
-            document.getElementById('car_plate_display').innerText = lastReport.plate;
-        }
-        saveHeaderInfo();
+        const mMax = getMaxPayload();
+        const calculatedEff = calcEffValue(lastCalc.distCargo, lastCalc.distTotal, lastCalc.weight, mMax);
 
         const newEntry = {
             date: lastCalc.date || new Date().toLocaleDateString('uk-UA'),
@@ -246,7 +280,7 @@
             weightTrailer: lastCalc.weightTrailer || '',
             tkm: lastCalc.tkm || '0',
             tkmTrailer: lastCalc.tkmTrailer || '',
-            eff: lastCalc.eff || '100',
+            eff: calculatedEff,
             fuelStart: lastCalc.fuelStart || '',
             oilStart: lastCalc.oilStart || '',
             fuelAdded: lastCalc.fuelAdded || '',
@@ -272,12 +306,28 @@
         const tbody = document.getElementById('bookBody');
         tbody.innerHTML = '';
 
+        const savedTitle = localStorage.getItem('book_car_title');
+        const savedPlate = localStorage.getItem('book_car_plate');
+        const savedFuel = localStorage.getItem('book_fuel_type');
+        const savedOil = localStorage.getItem('book_oil_type');
+
+        if (savedTitle) document.getElementById('car_title_display').innerHTML = savedTitle;
+        if (savedPlate) document.getElementById('car_plate_display').innerText = savedPlate;
+        if (savedFuel) document.getElementById('fuel_type_display').innerText = savedFuel;
+        if (savedOil) document.getElementById('oil_type_display').innerText = savedOil;
+
         if (currentEntries.length === 0) {
             tbody.innerHTML = `<tr><td colspan="28" style="padding:12px; color:#777; text-align:center;">Книга порожня. Натисніть "Додати з Дорожнього листа".</td></tr>`;
             return;
         }
 
+        const mMax = getMaxPayload();
+
         currentEntries.forEach((e, idx) => {
+            // Динамічний розрахунок Кф при кожному відображенні таблиці
+            const calculatedEff = calcEffValue(e.distCargo, e.distTotal, e.weight, mMax);
+            e.eff = calculatedEff;
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td contenteditable="true" onblur="updateCell(${idx}, 'date', this)">${e.date || ''}</td>
@@ -292,7 +342,11 @@
                 <td contenteditable="true" onblur="updateCell(${idx}, 'weightTrailer', this)">${e.weightTrailer || ''}</td>
                 <td contenteditable="true" onblur="updateCell(${idx}, 'tkm', this)"><b>${e.tkm || '0'}</b></td>
                 <td contenteditable="true" onblur="updateCell(${idx}, 'tkmTrailer', this)">${e.tkmTrailer || ''}</td>
-                <td><span class="eff-badge">${e.eff || '0'}%</span></td>
+                <td>
+                    <span class="eff-badge" onclick="showEffFormula(${idx})" title="Натисніть для перегляду формули розрахунку">
+                        ${calculatedEff}%
+                    </span>
+                </td>
                 <td contenteditable="true" onblur="updateCell(${idx}, 'fuelStart', this)">${e.fuelStart || ''}</td>
                 <td contenteditable="true" onblur="updateCell(${idx}, 'oilStart', this)">${e.oilStart || ''}</td>
                 <td contenteditable="true" onblur="updateCell(${idx}, 'fuelAdded', this)">${e.fuelAdded || ''}</td>
@@ -316,7 +370,12 @@
 
     function updateCell(idx, field, cellElem) {
         currentEntries[idx][field] = cellElem.innerText.trim();
-        localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+        // Якщо коригуються клітинки пробігу або ваги вантажу, примусово перераховуємо Кф
+        if (['distTotal', 'distCargo', 'weight'].includes(field)) {
+            renderTable();
+        } else {
+            localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+        }
     }
 
     function deleteRow(idx) {
