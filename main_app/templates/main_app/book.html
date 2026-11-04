@@ -1,185 +1,179 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-    <meta charset="UTF-8">
-    <title>Книга обліку роботи машин та витрачання пально-мастильних матеріалів</title>
-    <style>
-        * { box-sizing: border-box; }
-        body { font-family: 'Times New Roman', Times, serif; background: #1b3022; color: #fff; padding: 10px; margin: 0; }
-        .container { background: rgba(0, 0, 0, 0.25); padding: 10px; border-radius: 8px; width: 100%; max-width: 100%; }
-        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; font-family: 'Segoe UI', Arial, sans-serif; }
-        .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; color: white; }
-        .btn-home { background: #7f8c8d; }
-        .btn-green { background: #27ae60; }
-        .btn-blue { background: #2980b9; }
-        .btn-purple { background: #8e44ad; }
-        .btn-red { background: #c0392b; }
-        .btn:hover { opacity: 0.9; }
+<meta charset="UTF-8">
+<title>Книга обліку роботи машини та витрати матеріальних засобів</title>
+<style>
+*{ box-sizing:border-box; }
+body{ font-family:"Times New Roman","Liberation Serif",Times,serif; background:#1b3022; color:#fff; padding:10px; margin:0; }
+.container{ background:rgba(0,0,0,.25); padding:10px; border-radius:8px; width:100%; max-width:100%; }
 
-        .doc-header { background: #fff; color: #000; padding: 10px 15px; border-radius: 4px 4px 0 0; font-size: 11pt; border: 1px solid #000; border-bottom: none; font-family: 'Times New Roman', Times, serif; line-height: 1.2; }
-        .doc-footer-info { background: #fff; color: #000; padding: 8px 15px; border-radius: 0 0 4px 4px; font-size: 11pt; border: 1px solid #000; border-top: none; font-family: 'Times New Roman', Times, serif; line-height: 1.3; }
-        .hdr-field { margin-bottom: 2px; }
-        .line-input { border-bottom: 1px solid #000; padding: 0 5px; min-width: 250px; display: inline-block; outline: none; color: #000; font-weight: bold; font-size: 11pt; }
+.top-bar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px; flex-wrap:wrap; font-family:'Segoe UI',Arial,sans-serif; }
+.btn{ padding:6px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; display:inline-flex; align-items:center; gap:5px; text-decoration:none; color:#fff; }
+.btn-home{ background:#7f8c8d; } .btn-green{ background:#27ae60; } .btn-blue{ background:#2980b9; } .btn-purple{ background:#8e44ad; } .btn-red{ background:#c0392b; }
+.btn:hover{ opacity:.9; }
+.screen-note{ font-family:'Segoe UI',Arial,sans-serif; font-size:12px; color:#cfe8d5; margin:0 0 8px; }
 
-        .table-container { overflow-x: auto; background: white; color: black; padding: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.5); width: 100%; }
-        table { width: 100%; border-collapse: collapse; font-size: 9.5pt; text-align: center; font-family: 'Times New Roman', Times, serif; table-layout: fixed; }
-        th, td { border: 1px solid #000; padding: 2px 1px; vertical-align: middle; text-align: center; line-height: 1.0; word-wrap: break-word; overflow: hidden; }
-        th { background: #fff; font-weight: normal; }
+/* =====================================================================
+   ПАРАМЕТРИ БЛАНКА — з Word-файлу «книга обліку (пустий)»
+   Папір ......... A4 альбомна
+   Поля .......... верх 22,5 мм | низ 15 мм | ліве 15 мм | праве 14,5 мм
+   Шрифт ......... Times New Roman: заголовки таблиці 12 pt, рядок нумерації і дані 10 pt
+   Таблиця ....... 27 колонок, ширина 749,6 pt (14992 twips), без відступу,
+                   рамка 0,5 pt, поля комірок 5,4 pt зліва/справа
+   Висоти ........ шапка: 41,4 / 167,5 / 13,8 / 106,05 pt
+   ===================================================================== */
+.sheet-wrap{ overflow-x:auto; }
+.sheet{ background:#fff; color:#000; width:fit-content; min-width:297mm; padding:22.5mm 14.5mm 15mm 15mm; box-shadow:0 4px 10px rgba(0,0,0,.5); }
 
-        td[contenteditable="true"] { outline: none; }
-        td[contenteditable="true"]:focus { background: #e8f8f5 !important; }
+.hl{ display:block; }
+.hl .line-input{ display:inline-block; vertical-align:top; border-bottom:.5pt solid #000; outline:none; color:#000; white-space:pre-wrap; }
+.hl1{ height:16.1pt; font-size:14pt; }  .hl1 .line-input{ width:175pt; height:14.6pt; line-height:14.6pt; font-size:12pt; }
+.hl2{ height:13.8pt; font-size:12pt; }  .hl2 .line-input{ width:175pt; height:12.6pt; line-height:12.6pt; }
+.hl.fl{ height:13.8pt; font-size:12pt; } .hl.fl .line-input{ width:180pt; height:12.6pt; line-height:12.6pt; }
+.cap12{ font-size:12pt; height:13.8pt; line-height:13.8pt; }
+.cap10{ font-size:10pt; height:11.5pt; line-height:11.5pt; }
+.line-input:empty:before{ content:attr(data-ph); color:#9a9a9a; font-size:9pt; }
 
-        .v-box { height: 125px; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
-        .v-text { writing-mode: vertical-rl; transform: rotate(180deg); white-space: normal; font-size: 9.5pt; line-height: 0.95; padding: 1px; text-align: center; max-height: 120px; }
-        .oil-sub { font-size: 7.5pt; line-height: 0.85; display: block; margin-top: 1px; }
-        .eff-badge { display: inline-block; background: #e1f5fe; color: #0277bd; padding: 1px 3px; border-radius: 3px; cursor: pointer; font-weight: bold; border: 1px solid #81d4fa; font-size: 9.5pt; transition: 0.2s; }
-        .eff-badge:hover { background: #b3e5fc; border-color: #0288d1; }
-        .col-numbers { background: #f2f2f2; font-weight: bold; font-size: 8.5pt !important; }
-        .col-numbers td { font-size: 8.5pt !important; }
+table#bookTable{ border-collapse:collapse; table-layout:fixed; width:calc(749.6pt + 40px); font-size:10pt; text-align:center; font-family:"Times New Roman","Liberation Serif",Times,serif; }
+col.col-action{ width:40px; }
+#bookTable th, #bookTable td{ border:.5pt solid #000; padding:0 5.4pt; vertical-align:top; text-align:center; font-weight:normal; }
+#bookTable th{ font-size:12pt; line-height:13.8pt; }
+#bookTable th.rot{ padding:0; vertical-align:middle; }
+#bookTable th.top{ vertical-align:top; }
+tr.h0{ height:41.4pt; } tr.h1{ height:167.5pt; } tr.h2{ height:13.8pt; } tr.h3{ height:106.05pt; }
+tr.hn td{ font-size:10pt; line-height:11.5pt; padding:0; height:11.5pt; }
 
-        col.col-1 { width: 3.5%; } col.col-2 { width: 3%; } col.col-3 { width: 3.2%; } col.col-4 { width: 3.2%; } col.col-5 { width: 3.2%; } col.col-6 { width: 3%; } col.col-7 { width: 3%; } col.col-8 { width: 11%; } col.col-9 { width: 3.2%; } col.col-10 { width: 3.2%; } col.col-11 { width: 3.2%; } col.col-12 { width: 3.2%; } col.col-13 { width: 3.5%; }
-        col.col-14, col.col-15, col.col-16, col.col-17, col.col-18, col.col-19, col.col-20, col.col-21, col.col-22, col.col-23, col.col-24, col.col-25, col.col-26, col.col-27 { width: 3.5%; }
-        col.col-action { width: 2.5%; }
+.v{ display:inline-block; writing-mode:vertical-rl; transform:rotate(180deg); line-height:13.8pt; text-align:center; }
+.L1{ max-height:156pt; } .L2{ max-height:108.5pt; } .L3{ max-height:276pt; } .L3b{ max-height:94.7pt; } .L4{ max-height:317pt; }
 
-        .archive-panel { margin-top: 15px; background: rgba(255,255,255,0.08); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); font-family: 'Segoe UI', Arial, sans-serif; }
-        .archive-list { list-style: none; padding: 0; margin: 8px 0 0 0; }
-        .archive-item { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 6px 10px; border-radius: 4px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+#bookBody td{ font-size:10pt; line-height:11.5pt; height:11.5pt; padding:0 1pt; vertical-align:middle; white-space:nowrap; }
+#bookBody td.wrap{ white-space:normal; overflow-wrap:anywhere; }
+#bookBody td.multi{ white-space:pre-line; font-size:8pt; line-height:9pt; }
+#bookBody tr{ break-inside:avoid; }
+thead{ display:table-header-group; }
+td[contenteditable="true"]{ outline:none; }
+@media screen{ td[contenteditable="true"]:focus{ background:#e8f8f5; } td[contenteditable="true"]:hover{ background:#fffbd6; } }
 
-        @media print {
-            @page { size: A4 landscape; margin: 5mm; }
-            html, body { width: 100% !important; height: 100% !important; background: white !important; color: black !important; padding: 0 !important; margin: 0 !important; }
-            .top-bar, .archive-panel, .no-print { display: none !important; }
-            .container { background: none !important; padding: 0 !important; margin: 0 !important; width: 100% !important; box-shadow: none !important; border: none !important; }
-            .doc-header, .doc-footer-info { padding: 0 !important; font-size: 10pt !important; border: none !important; background: transparent !important; }
-            .line-input { border-bottom: 1px solid #000 !important; font-size: 10pt !important; padding: 0 3px !important; }
-            .table-container { box-shadow: none !important; overflow: visible !important; padding: 0 !important; width: 100% !important; border: none !important; }
-            table { width: 100% !important; font-size: 8pt !important; table-layout: fixed !important; border-collapse: collapse !important; }
-            th, td { padding: 1px 0px !important; border: 1px solid #000 !important; font-size: 8pt !important; line-height: 0.95 !important; text-align: center !important; }
-            col.col-action { width: 0% !important; display: none !important; }
-        }
-    </style>
+.eff-badge{ display:inline-block; background:#e1f5fe; color:#0277bd; padding:0 1px; border-radius:2px; cursor:pointer; font-weight:bold; border:1px solid #81d4fa; }
+
+.modal-overlay{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+.modal-content{ background:#fff; color:#2c3e50; padding:15px; border-radius:8px; width:400px; max-width:90%; box-shadow:0 5px 15px rgba(0,0,0,.3); }
+.modal-header{ font-size:14px; font-weight:bold; color:#27ae60; border-bottom:2px solid #27ae60; padding-bottom:6px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
+.modal-close{ cursor:pointer; font-size:16px; color:#7f8c8d; font-weight:bold; } .modal-close:hover{ color:#e74c3c; }
+.calc-step{ background:#f8f9fa; border-left:4px solid #2980b9; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:11px; line-height:1.4; }
+.calc-formula{ font-family:'Segoe UI',Arial,sans-serif; font-weight:bold; color:#d35400; background:#fef5e7; padding:2px 4px; border-radius:3px; display:inline-block; }
+
+.archive-panel{ margin-top:15px; background:rgba(255,255,255,.08); padding:12px; border-radius:6px; border:1px solid rgba(255,255,255,.1); font-family:'Segoe UI',Arial,sans-serif; }
+.archive-list{ list-style:none; padding:0; margin:8px 0 0 0; }
+.archive-item{ background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); padding:6px 10px; border-radius:4px; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; }
+
+/* ---------- ДРУК ---------- */
+@page{ size:A4 landscape; margin:22.5mm 14.5mm 15mm 15mm; }
+@media print{
+    html, body{ background:#fff !important; color:#000 !important; padding:0 !important; margin:0 !important; }
+    .top-bar, .archive-panel, .no-print, .modal-overlay, .screen-note{ display:none !important; }
+    .container{ background:none !important; padding:0 !important; margin:0 !important; width:auto !important; border-radius:0; }
+    .sheet-wrap{ overflow:visible; }
+    .sheet{ padding:0; box-shadow:none; width:auto; min-width:0; }
+    table#bookTable{ width:749.6pt; }
+    col.col-action{ display:none !important; }
+    #bookBody td{ color:#000 !important; background:transparent !important; }
+    .eff-badge{ border:none; background:transparent; color:#000; padding:0; }
+    .line-input:empty:before{ content:""; }
+    .sheet-foot{ break-inside:avoid; }
+}
+</style>
 </head>
 <body>
-
 <div class="container">
     <div class="top-bar">
         <div>
-            <a href="{% url 'index' %}" class="btn btn-home">🏠 На головну</a>
+            <a href="calc.html" class="btn btn-home">🏠 На головну</a>
             <button class="btn btn-green" onclick="addFromDL()">➕ Додати з Дорожнього листа</button>
             <button class="btn btn-blue" onclick="window.print()">🖨️ Друк (A4)</button>
         </div>
         <div>
-            <button class="btn btn-purple" onclick="saveArchiveToDB()">💾 Зберегти в БД</button>
+            <button class="btn btn-purple" onclick="saveArchive()">💾 Зберегти в архів</button>
             <button class="btn btn-red" onclick="clearCurrentBook()">🗑️ Очистити книгу</button>
         </div>
     </div>
+    <div class="screen-note" id="emptyNote"></div>
 
-    <div class="doc-header">
-        <div class="hdr-field"><span id="car_title_display" class="line-input" contenteditable="true">-</span></div>
-        <div style="font-size: 9pt; margin-bottom: 4px; color: #000;">(марка (тип) машини)</div>
-        <div class="hdr-field"><span id="car_plate_display" class="line-input" contenteditable="true">-</span></div>
-        <div style="font-size: 9pt; color: #000;">(номерний знак)</div>
-    </div>
+    <div class="sheet-wrap"><div class="sheet">
+        <!-- верхня шапка (як у Word) -->
+        <div class="hl hl1"><span id="car_title_display" class="line-input" contenteditable="true" data-ph="марка машини"></span></div>
+        <div class="cap12">(марка&nbsp; (тип)&nbsp; машини)</div>
+        <div class="hl hl2"><span id="car_plate_display" class="line-input" contenteditable="true" data-ph="номерний знак"></span></div>
+        <div class="cap10">(номерний знак)</div>
 
-    <div class="table-container">
         <table id="bookTable">
-            <colgroup>
-                <col class="col-1"><col class="col-2"><col class="col-3"><col class="col-4">
-                <col class="col-5"><col class="col-6"><col class="col-7"><col class="col-8">
-                <col class="col-9"><col class="col-10"><col class="col-11"><col class="col-12">
-                <col class="col-13"><col class="col-14"><col class="col-15"><col class="col-16">
-                <col class="col-17"><col class="col-18"><col class="col-19"><col class="col-20">
-                <col class="col-21"><col class="col-22"><col class="col-23"><col class="col-24">
-                <col class="col-25"><col class="col-26"><col class="col-27"><col class="col-action" class="no-print">
-            </colgroup>
+            <colgroup><col style="width:32.55pt"><col style="width:32.20pt"><col style="width:26.30pt"><col style="width:26.15pt"><col style="width:26.15pt"><col style="width:30.65pt"><col style="width:36.95pt"><col style="width:28.35pt"><col style="width:25.50pt"><col style="width:38.30pt"><col style="width:21.25pt"><col style="width:22.40pt"><col style="width:26.15pt"><col style="width:25.30pt"><col style="width:25.60pt"><col style="width:25.30pt"><col style="width:26.35pt"><col style="width:26.10pt"><col style="width:28.35pt"><col style="width:28.35pt"><col style="width:28.35pt"><col style="width:28.85pt"><col style="width:27.40pt"><col style="width:25.30pt"><col style="width:25.30pt"><col style="width:27.80pt"><col style="width:28.35pt"><col class="col-action"></colgroup>
             <thead>
-            <tr>
-                <th colspan="2" style="padding: 2px;">Дорожній лист</th>
-                <th colspan="5">Пройдено кілометрів<br>(відпрацьовано мотогодин)</th>
-                <th colspan="3">Перевезено,<br>т</th>
-                <th colspan="2">Виконано,<br>т/км</th>
-                <th rowspan="4"><div class="v-box"><div class="v-text">показник ефективності, %</div></div></th>
-                <th colspan="14">Матеріальні засоби, л</th>
-                <th rowspan="4" class="no-print">Дія</th>
-            </tr>
-            <tr>
-                <th rowspan="3"><div class="v-box"><div class="v-text">дата (період)</div></div></th>
-                <th rowspan="3"><div class="v-box"><div class="v-text">номер</div></div></th>
-                <th colspan="3">автомобілем</th>
-                <th colspan="2">причепом</th>
-                <th rowspan="3" style="white-space: normal;"><div class="v-box"><div class="v-text">найменування вантажу</div></div></th>
-                <th rowspan="2">кількість</th>
-                <th rowspan="3"><div class="v-box"><div class="v-text">у тому числі на причепі</div></div></th>
-                <th rowspan="3"><div class="v-box"><div class="v-text">усього</div></div></th>
-                <th rowspan="3"><div class="v-box"><div class="v-text">у тому числі причепом</div></div></th>
-                <th colspan="2"><div class="v-box"><div class="v-text">наявність перед виїздом<br>(залишок на початок періоду)</div></div></th>
-                <th colspan="2"><div class="v-box"><div class="v-text">отримано</div></div></th>
-                <th colspan="2"><div class="v-box"><div class="v-text">наявність при постановці на стоянку (залишок на кінець періоду)</div></div></th>
-                <th colspan="2"><div class="v-box"><div class="v-text">використано</div></div></th>
-                <th colspan="2"><div class="v-box"><div class="v-text">має бути за нормою</div></div></th>
-                <th colspan="2"><div class="v-box"><div class="v-text">економія</div></div></th>
-                <th colspan="2"><div class="v-box"><div class="v-text">перевитрата</div></div></th>
-            </tr>
-            <tr>
-                <td colspan="3">у тому числі</td>
-                <th rowspan="2"><div class="v-box"><div class="v-text">усього</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">у тому числі з вантажем</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">пального</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">мастила</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">пального</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">мастила</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">пального</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">мастила</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">пального</div></div></th>
-                <th rowspan="2">мастила / AdBlue<br><span class="oil-sub">MM<br>TM<br>ПМ<br>CM<br>AdB</span></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">пального</div></div></th>
-                <th rowspan="2">мастила / AdBlue<br><span class="oil-sub">MM<br>TM<br>ПМ<br>CM<br>AdB</span></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">пального</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">мастила</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">пального</div></div></th>
-                <th rowspan="2"><div class="v-box"><div class="v-text">мастила</div></div></th>
-            </tr>
-            <tr>
-                <th><div class="v-box"><div class="v-text">усього</div></div></th>
-                <th><div class="v-box"><div class="v-text">з вантажем</div></div></th>
-                <th><div class="v-box"><div class="v-text">без вантажу</div></div></th>
-                <th><div class="v-box"><div class="v-text">усього</div></div></th>
-            </tr>
-            <tr class="col-numbers">
-                <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td>
-                <td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td>
-                <td>14</td><td>15</td><td>16</td><td>17</td><td>18</td><td>19</td>
-                <td>20</td><td>21</td><td>22</td><td>23</td><td>24</td><td>25</td><td>26</td><td>27</td>
-                <td class="no-print">-</td>
-            </tr>
-            </thead>
+<tr class="h0">
+  <th colspan="2">Дорожній<br>лист</th>
+  <th colspan="5">Пройдено кілометрів<br>(відпрацьовано мотогодин)</th>
+  <th colspan="3">Перевезено,<br>т</th>
+  <th colspan="2">Вико-<br>нано,<br>т/км</th>
+  <th class="rot" rowspan="4"><div class="v L4">показник ефективності, %</div></th>
+  <th colspan="14">Матеріальні засоби, л</th>
+  <th rowspan="4" class="no-print">Дія</th>
+</tr>
+<tr class="h1">
+  <th class="rot" rowspan="3"><div class="v L3">дата (період)</div></th>
+  <th class="rot" rowspan="3"><div class="v L3">номер</div></th>
+  <th colspan="3" class="top"><br><br><br>автомобілем</th>
+  <th colspan="2" class="top"><br><br><br>причепом</th>
+  <th class="rot" rowspan="3"><div class="v L3">найменування вантажу</div></th>
+  <th colspan="2" class="top"><br><br><br>кількість</th>
+  <th class="rot" rowspan="3"><div class="v L3">усього</div></th>
+  <th class="rot" rowspan="3"><div class="v L3">у тому числі причепом</div></th>
+  <th class="rot" colspan="2"><div class="v L1">наявність перед виїздом (залишок на початок періоду)</div></th><th class="rot" colspan="2"><div class="v L1">отримано</div></th><th class="rot" colspan="2"><div class="v L1">наявність при постановці на стоянку (залишок на кінець періоду)</div></th><th class="rot" colspan="2"><div class="v L1">використано</div></th><th class="rot" colspan="2"><div class="v L1">має бути за нормою</div></th><th class="rot" colspan="2"><div class="v L1">економія</div></th><th class="rot" colspan="2"><div class="v L1">перевитрата</div></th>
+</tr>
+<tr class="h2">
+  <th colspan="3">у тому числі</th>
+  <th class="rot" rowspan="2"><div class="v L2">усього</div></th>
+  <th class="rot" rowspan="2"><div class="v L2">у тому числі з вантажем</div></th>
+  <th class="rot" rowspan="2"><div class="v L2">усього</div></th>
+  <th class="rot" rowspan="2"><div class="v L2">у тому числі на причепі</div></th>
+  <th class="rot" rowspan="2"><div class="v L2">пального</div></th><th class="rot" rowspan="2"><div class="v L2">мастила</div></th><th class="rot" rowspan="2"><div class="v L2">пального</div></th><th class="rot" rowspan="2"><div class="v L2">мастила</div></th><th class="rot" rowspan="2"><div class="v L2">пального</div></th><th class="rot" rowspan="2"><div class="v L2">мастила</div></th><th class="rot" rowspan="2"><div class="v L2">пального</div></th><th class="rot" rowspan="2"><div class="v L2">мастила</div></th><th class="rot" rowspan="2"><div class="v L2">пального</div></th><th class="rot" rowspan="2"><div class="v L2">мастила</div></th><th class="rot" rowspan="2"><div class="v L2">пального</div></th><th class="rot" rowspan="2"><div class="v L2">мастила</div></th><th class="rot" rowspan="2"><div class="v L2">пального</div></th><th class="rot" rowspan="2"><div class="v L2">мастила</div></th>
+</tr>
+<tr class="h3">
+  <th class="rot"><div class="v L3b">усього</div></th><th class="rot"><div class="v L3b">з вантажем</div></th><th class="rot"><div class="v L3b">без вантажу</div></th>
+</tr>
+<tr class="hn"><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td><td>15</td><td>16</td><td>17</td><td>18</td><td>19</td><td>20</td><td>21</td><td>22</td><td>23</td><td>24</td><td>25</td><td>26</td><td>27</td><td class="no-print">-</td></tr>
+</thead>
             <tbody id="bookBody"></tbody>
         </table>
-    </div>
 
-    <div class="doc-footer-info">
-        <div class="hdr-field"><span id="fuel_type_display" class="line-input" contenteditable="true" style="min-width: 250px;">-</span></div>
-        <div style="font-size: 9pt; margin-bottom: 4px; color: #000;">(найменування пального)</div>
-        <div class="hdr-field"><span id="oil_type_display" class="line-input" contenteditable="true" style="min-width: 250px;">-</span></div>
-        <div style="font-size: 9pt; color: #000;">(найменування мастила)</div>
-    </div>
+        <!-- нижня шапка -->
+        <div class="sheet-foot">
+            <div class="hl fl"><span id="fuel_type_display" class="line-input" contenteditable="true" data-ph="найменування пального"></span></div>
+            <div class="cap12">(найменування пального)</div>
+            <div class="hl fl"><span id="oil_type_display" class="line-input" contenteditable="true" data-ph="найменування мастила"></span></div>
+            <div class="cap12">(найменування мастила)</div>
+        </div>
+    </div></div>
 
     <div class="archive-panel no-print">
-        <h4 style="margin: 0 0 8px 0; color: #3498db;">📜 Збережені книги у Базі Даних (Акаунт: {{ user.username }})</h4>
-        <ul id="archiveList" class="archive-list">
-            <li style="color: #aaa; font-size: 11px;">Завантаження з БД...</li>
-        </ul>
+        <h4 style="margin:0 0 8px 0; color:#3498db;">📜 Список збережених книг (Архів)</h4>
+        <ul id="archiveList" class="archive-list"><li style="color:#aaa; font-size:11px;">Немає збережених книг</li></ul>
+    </div>
+</div>
+
+<div id="effModal" class="modal-overlay" onclick="closeEffModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header"><span>📊 Деталізація розрахунку K_f</span><span class="modal-close" onclick="closeEffModal()">&times;</span></div>
+        <div id="modalBody"></div>
     </div>
 </div>
 
 <script>
-    const CURRENT_USER_ID = "{{ user.id|default:0 }}";
     let currentEntries = JSON.parse(localStorage.getItem('book_entries')) || [];
-    let loadedDbBooks = {};
 
     window.onload = function() {
         renderTable();
-        fetchArchivesFromDB();
+        renderArchives();
         setupHeaderListeners();
     };
 
@@ -197,110 +191,56 @@
         localStorage.setItem('book_oil_type', document.getElementById('oil_type_display').innerText.trim());
     }
 
-    // --- МОДУЛЬ ОБЧИСЛЕННЯ КОЕФІЦІЄНТА ЕФЕКТИВНОСТІ (Кф) ---
-    function getMaxPayload() {
-        const selectedCar = JSON.parse(localStorage.getItem('selectedCar_user_' + CURRENT_USER_ID) || '{}');
-        if (selectedCar && selectedCar.max_payload) {
-            return parseFloat(selectedCar.max_payload) || 4.5;
-        }
-        const cars = JSON.parse(localStorage.getItem('cars_user_' + CURRENT_USER_ID) || '{}');
-        for (let id in cars) {
-            if (cars[id] && cars[id].max_payload) {
-                return parseFloat(cars[id].max_payload);
-            }
-        }
-        return 4.5; // Базове значення за замовчуванням (т)
-    }
-
-    function calcEffValue(distCargo, distTotal, weightFact, weightMax) {
-        const sCargo = parseFloat(distCargo) || 0;
-        const sTotal = parseFloat(distTotal) || 0;
-        const mFact = parseFloat(weightFact) || 0;
-        const mMax = parseFloat(weightMax) || 0;
-
-        if (sTotal <= 0 || mMax <= 0) return 0;
-
-        const k1 = sCargo / sTotal;
-        const k2 = mFact / mMax;
-        const eff = (k1 * k2) * 100;
-
-        return eff.toFixed(1);
-    }
-
-    function showEffFormula(idx) {
-        const entry = currentEntries[idx];
-        if (!entry) return;
-
-        const sCargo = parseFloat(entry.distCargo) || 0;
-        const sTotal = parseFloat(entry.distTotal) || 0;
-        const mFact = parseFloat(entry.weight) || 0;
-        const mMax = getMaxPayload();
-
-        const k1 = sTotal > 0 ? (sCargo / sTotal) : 0;
-        const k2 = mMax > 0 ? (mFact / mMax) : 0;
-        const effResult = (k1 * k2 * 100).toFixed(1);
-
-        const message = `🧮 ФОРМУЛА РОЗРАХУНКУ КОЕФІЦІЄНТА ЕФЕКТИВНОСТІ (Кф):\n\n` +
-            `Кф = (Sвантаж / Sзаг) * (mфакт / mмакс) * 100%\n\n` +
-            `Вихідні дані розрахунку:\n` +
-            `• Sвантаж (пробіг з вантажем): ${sCargo} км\n` +
-            `• Sзаг (загальний пробіг): ${sTotal} км\n` +
-            `• mфакт (вага вантажу): ${mFact} т\n` +
-            `• mмакс (макс. вантажопідйомність ТЗ): ${mMax} т\n\n` +
-            `Покрокове обчислення:\n` +
-            `1) Кф1 (пробіг) = ${sCargo} / ${sTotal} = ${k1.toFixed(3)}\n` +
-            `2) Кф2 (вантаж) = ${mFact} / ${mMax} = ${k2.toFixed(3)}\n` +
-            `3) Кф = (${k1.toFixed(3)} * ${k2.toFixed(3)}) * 100% = ${effResult}%`;
-
-        alert(message);
-    }
-
-    // --- ПЕРЕНОС ДАНИХ З ДОРОЖНЬОГО ЛИСТА (КАЛЬКУЛЯТОРА) ---
-    function addFromDL() {
-        const lastCalc = JSON.parse(localStorage.getItem('last_waybill_data') || '{}');
+    function calculateKfForEntry(e) {
+        const vv = parseFloat(e.distCargo) || 0;
+        const zv = parseFloat(e.distTotal) || 0;
+        const v = parseFloat(e.weight) || 0;
         
-        if (!lastCalc || !lastCalc.distTotal) {
-            alert("Не знайдено останнього розрахунку! Спочатку виконайте розрахунок у Калькуляторі ПММ.");
-            return;
+        let mv = 4.5;
+        if (e.calcDetails && e.calcDetails.mv) {
+            mv = parseFloat(e.calcDetails.mv) || 4.5;
         }
 
-        const mMax = getMaxPayload();
-        const calculatedEff = calcEffValue(lastCalc.distCargo, lastCalc.distTotal, lastCalc.weight, mMax);
+        const kf1 = zv > 0 ? (vv / zv) : 0;
+        const kf2 = mv > 0 ? (v / mv) : 0;
+        const eff = (kf1 * kf2 * 100);
 
-        const newEntry = {
-            date: lastCalc.date || new Date().toLocaleDateString('uk-UA'),
-            docNum: lastCalc.docNum || 'ДЛ-' + Math.floor(Math.random() * 1000),
-            distTotal: lastCalc.distTotal || '0',
-            distCargo: lastCalc.distCargo || '0',
-            distEmpty: lastCalc.distEmpty || '0',
-            distTrailer: lastCalc.distTrailer || '',
-            distTrailerCargo: lastCalc.distTrailerCargo || '',
-            cargoName: lastCalc.cargoName || 'Вантаж',
-            weight: lastCalc.weight || '0',
-            weightTrailer: lastCalc.weightTrailer || '',
-            tkm: lastCalc.tkm || '0',
-            tkmTrailer: lastCalc.tkmTrailer || '',
-            eff: calculatedEff,
-            fuelStart: lastCalc.fuelStart || '',
-            oilStart: lastCalc.oilStart || '',
-            fuelAdded: lastCalc.fuelAdded || '',
-            oilAdded: lastCalc.oilAdded || '',
-            fuelEnd: lastCalc.fuelEnd || '',
-            oilEnd: lastCalc.oilEnd || '',
-            fuelFact: lastCalc.fuelFact || lastCalc.fuelNorm || '0',
-            oilFactDetails: lastCalc.oilFactDetails || '',
-            fuelNorm: lastCalc.fuelNorm || '0',
-            oilNormDetails: lastCalc.oilNormDetails || '',
-            save: lastCalc.save || '0',
-            oilSave: lastCalc.oilSave || '0',
-            over: lastCalc.over || '0',
-            oilOver: lastCalc.oilOver || '0'
+        return {
+            vv: vv.toFixed(1),
+            zv: zv.toFixed(1),
+            v: v.toFixed(1),
+            mv: mv.toFixed(1),
+            kf1: kf1.toFixed(2),
+            kf2: kf2.toFixed(2),
+            eff: eff.toFixed(1)
         };
-
-        currentEntries.push(newEntry);
-        renderTable();
-        alert("Запис із дорожнього листа успішно додано до книги!");
     }
+
+    // кількість порожніх рядків у бланку Word — 2
+    const MIN_ROWS = 2;
+    // [поле, значення за замовчуванням, клас, інлайн-стиль, жирний]
+    const BOOK_COLS = [
+        ['date','', 'fit'], ['docNum','', 'fit'], ['distTotal','0','fit','', true], ['distCargo','0','fit'], ['distEmpty','0','fit'],
+        ['distTrailer','','fit'], ['distTrailerCargo','','fit'], ['cargoName','', 'wrap'], ['weight','0','fit'], ['weightTrailer','','fit'],
+        ['tkm','0','fit','', true], ['tkmTrailer','','fit'], null,
+        ['fuelStart','','fit'], ['oilStart','','fit'], ['fuelAdded','','fit'], ['oilAdded','','fit'], ['fuelEnd','','fit'], ['oilEnd','','fit'],
+        ['fuelFact','','fit','', true], ['oilFactDetails','','multi fit'], ['fuelNorm','0','fit','', true], ['oilNormDetails','','multi fit'],
+        ['save','','fit','color:green;'], ['oilSave','','fit','color:green;'], ['over','','fit','color:red;'], ['oilOver','','fit','color:red;']
+    ];
+
+    function fitCells() {
+        document.querySelectorAll('#bookBody td.fit').forEach(td => {
+            const base = td.classList.contains('multi') ? 8 : 10;
+            let fs = base;
+            td.style.fontSize = fs + 'pt';
+            let guard = 0;
+            while (td.scrollWidth > td.clientWidth + 0.5 && fs > 5 && guard++ < 12) {
+                fs -= 0.5;
+                td.style.fontSize = fs + 'pt';
+            }
+        });
+    }
+    window.addEventListener('beforeprint', fitCells);
 
     function renderTable() {
         const tbody = document.getElementById('bookBody');
@@ -311,76 +251,262 @@
         const savedFuel = localStorage.getItem('book_fuel_type');
         const savedOil = localStorage.getItem('book_oil_type');
 
-        if (savedTitle) document.getElementById('car_title_display').innerHTML = savedTitle;
-        if (savedPlate) document.getElementById('car_plate_display').innerText = savedPlate;
-        if (savedFuel) document.getElementById('fuel_type_display').innerText = savedFuel;
-        if (savedOil) document.getElementById('oil_type_display').innerText = savedOil;
+        if (savedTitle && savedTitle !== '-') document.getElementById('car_title_display').innerHTML = savedTitle;
+        if (savedPlate && savedPlate !== '-') document.getElementById('car_plate_display').innerText = savedPlate;
+        if (savedFuel && savedFuel !== '-') document.getElementById('fuel_type_display').innerText = savedFuel;
+        if (savedOil && savedOil !== '-') document.getElementById('oil_type_display').innerText = savedOil;
 
-        if (currentEntries.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="28" style="padding:12px; color:#777; text-align:center;">Книга порожня. Натисніть "Додати з Дорожнього листа".</td></tr>`;
-            return;
-        }
-
-        const mMax = getMaxPayload();
+        document.getElementById('emptyNote').innerText = currentEntries.length === 0
+            ? 'Книга порожня. Натисніть "Додати з Дорожнього листа" або введіть дані вручну в рядки таблиці.'
+            : '';
 
         currentEntries.forEach((e, idx) => {
-            // Динамічний розрахунок Кф при кожному відображенні таблиці
-            const calculatedEff = calcEffValue(e.distCargo, e.distTotal, e.weight, mMax);
-            e.eff = calculatedEff;
-
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td contenteditable="true" onblur="updateCell(${idx}, 'date', this)">${e.date || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'docNum', this)">${e.docNum || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'distTotal', this)"><b>${e.distTotal || '0'}</b></td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'distCargo', this)">${e.distCargo || '0'}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'distEmpty', this)">${e.distEmpty || '0'}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'distTrailer', this)">${e.distTrailer || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'distTrailerCargo', this)">${e.distTrailerCargo || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'cargoName', this)">${e.cargoName || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'weight', this)">${e.weight || '0'}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'weightTrailer', this)">${e.weightTrailer || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'tkm', this)"><b>${e.tkm || '0'}</b></td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'tkmTrailer', this)">${e.tkmTrailer || ''}</td>
-                <td>
-                    <span class="eff-badge" onclick="showEffFormula(${idx})" title="Натисніть для перегляду формули розрахунку">
-                        ${calculatedEff}%
-                    </span>
-                </td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'fuelStart', this)">${e.fuelStart || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'oilStart', this)">${e.oilStart || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'fuelAdded', this)">${e.fuelAdded || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'oilAdded', this)">${e.oilAdded || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'fuelEnd', this)">${e.fuelEnd || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'oilEnd', this)">${e.oilEnd || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'fuelFact', this)"><b>${e.fuelFact || ''}</b></td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'oilFactDetails', this)" style="font-size:8pt;">${e.oilFactDetails || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'fuelNorm', this)"><b>${e.fuelNorm || '0'}</b></td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'oilNormDetails', this)" style="font-size:8pt;">${e.oilNormDetails || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'save', this)" style="color:green;">${e.save || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'oilSave', this)" style="color:green;">${e.oilSave || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'over', this)" style="color:red;">${e.over || ''}</td>
-                <td contenteditable="true" onblur="updateCell(${idx}, 'oilOver', this)" style="color:red;">${e.oilOver || ''}</td>
-                <td class="no-print"><button onclick="deleteRow(${idx})" style="background:#e74c3c; color:white; border:none; padding:1px 4px; font-size:9px;">✕</button></td>
-            `;
+
+            e.calcDetails = calculateKfForEntry(e);
+            e.eff = e.calcDetails.eff;
+
+            let html = '';
+            BOOK_COLS.forEach(c => {
+                if (c === null) {
+                    html += `<td><span class="eff-badge" title="Натисніть для перегляду розрахунку" onclick="showEffDetails(${idx})">${e.eff}%</span></td>`;
+                    return;
+                }
+                const [field, def, cls, style, bold] = c;
+                let val = (e[field] !== undefined && e[field] !== '') ? e[field] : def;
+                if (bold && val !== '') val = `<b>${val}</b>`;
+                html += `<td class="${cls || ''}" contenteditable="true" onblur="updateCell(${idx}, '${field}', this)"${style ? ` style="${style}"` : ''}>${val}</td>`;
+            });
+            html += `<td class="no-print"><button onclick="deleteRow(${idx})" style="background:#e74c3c; color:white; border:none; border-radius:2px; cursor:pointer; padding:1px 4px; font-size:9px;">✕</button></td>`;
+            tr.innerHTML = html;
             tbody.appendChild(tr);
         });
+
+        // порожні рядки бланка (як у Word), для заповнення від руки
+        for (let i = currentEntries.length; i < MIN_ROWS; i++) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td></td>'.repeat(27) + '<td class="no-print"></td>';
+            tbody.appendChild(tr);
+        }
+
         localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+        fitCells();
     }
 
     function updateCell(idx, field, cellElem) {
-        currentEntries[idx][field] = cellElem.innerText.trim();
-        // Якщо коригуються клітинки пробігу або ваги вантажу, примусово перераховуємо Кф
+        let text = cellElem.innerText.trim();
+        currentEntries[idx][field] = text;
+
         if (['distTotal', 'distCargo', 'weight'].includes(field)) {
+            currentEntries[idx].calcDetails = calculateKfForEntry(currentEntries[idx]);
+            currentEntries[idx].eff = currentEntries[idx].calcDetails.eff;
             renderTable();
-        } else {
-            localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+            return;
+        }
+
+        localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+        fitCells();
+    }
+
+    function addFromDL() {
+        const last = JSON.parse(localStorage.getItem('last_report_data'));
+        if (!last) {
+            alert("Не знайдено даних з останнього розрахунку дорожнього листа!");
+            return;
+        }
+
+        let totalCargo = 0;
+        let totalEmpty = 0;
+        let totalDist = 0;
+        let maxWeight = parseFloat(last.weight) || 0;
+        let cargoName = "";
+
+        (last.rows || []).forEach(r => {
+            const d = parseFloat(r.dist) || 0;
+            totalDist += d;
+            if (r.cargo && parseFloat(r.weight) > 0) {
+                totalCargo += d;
+                cargoName = r.cargo;
+                if (parseFloat(r.weight) > maxWeight) maxWeight = parseFloat(r.weight);
+            } else {
+                totalEmpty += d;
+            }
+        });
+
+        const totalQ = parseFloat(last.totalFuel || 0);
+        const tkmVal = (totalCargo * maxWeight).toFixed(1);
+
+        let maxPayload = parseFloat(last.maxPayload) || 0;
+        const selectedCarObj = JSON.parse(localStorage.getItem('selectedCar')) || {};
+        if (!maxPayload && selectedCarObj.maxPayload) {
+            maxPayload = parseFloat(selectedCarObj.maxPayload);
+        }
+        if (!maxPayload) maxPayload = 4.5;
+
+        const kf1 = totalDist > 0 ? (totalCargo / totalDist) : 0;
+        const kf2 = maxPayload > 0 ? (maxWeight / maxPayload) : 0;
+        const effVal = (kf1 * kf2 * 100);
+
+        const om = (totalQ * (parseFloat(last.om) || 0) / 100).toFixed(2);
+        const ot = (totalQ * (parseFloat(last.ot) || 0) / 100).toFixed(2);
+        const os = (totalQ * (parseFloat(last.os) || 0) / 100).toFixed(2);
+        const op = (totalQ * (parseFloat(last.op) || 0) / 100).toFixed(2);
+
+        let oilFormat = `${om}<br>${ot}<br>${os}<br>${op}`;
+
+        if (last.hasAdBlue) {
+            const adBlueVal = (totalQ * (parseFloat(last.adBlueRate) || 0) / 100).toFixed(2);
+            oilFormat += `<br><b>${adBlueVal}</b>`;
+        }
+
+        let extractedTitle = last.carName || last.car || selectedCarObj.name || "";
+        let extractedPlate = last.plate || selectedCarObj.plate || "";
+
+        if (extractedTitle.includes('(') && extractedTitle.includes(')')) {
+            const parts = extractedTitle.split('(');
+            extractedTitle = parts[0].trim();
+            if (!extractedPlate || extractedPlate === "Б/Н") {
+                extractedPlate = parts[1].replace(')', '').trim();
+            }
+        }
+
+        let carCategory = selectedCarObj.category || "";
+        const carsDB = JSON.parse(localStorage.getItem('cars')) || {};
+
+        if (!carCategory) {
+            for (let id in carsDB) {
+                if (carsDB[id].name === extractedTitle || id.includes(extractedTitle) || extractedTitle.includes(carsDB[id].name)) {
+                    carCategory = carsDB[id].category || "";
+                    break;
+                }
+            }
+        }
+
+        function formatCategoryName(cat) {
+            if (!cat) return "";
+            let lower = cat.toLowerCase().trim();
+            if (lower === "легкові" || lower === "легковий") return "легковий";
+            if (lower === "вантажні" || lower === "вантажний") return "вантажний";
+            if (lower === "спеціальні" || lower === "спеціальний") return "спеціальний";
+            if (lower === "автобуси" || lower === "автобус") return "автобус";
+            return lower;
+        }
+
+        let categoryFormatted = formatCategoryName(carCategory);
+
+        let fullTitleHTML = extractedTitle;
+        if (categoryFormatted) {
+            fullTitleHTML = `${extractedTitle} <b>${categoryFormatted}</b>`;
+        }
+
+        if (extractedTitle) {
+            document.getElementById('car_title_display').innerHTML = fullTitleHTML;
+            localStorage.setItem('book_car_title', fullTitleHTML);
+        }
+        if (extractedPlate && extractedPlate !== "Б/Н") {
+            document.getElementById('car_plate_display').innerText = extractedPlate;
+            localStorage.setItem('book_car_plate', extractedPlate);
+        }
+
+        if (last.fuelType) {
+            document.getElementById('fuel_type_display').innerText = last.fuelType;
+            localStorage.setItem('book_fuel_type', last.fuelType);
+        }
+
+        const newEntry = {
+            date: new Date().toLocaleDateString('uk-UA', {day:'2-digit', month:'2-digit'}),
+            docNum: last.docNum || "",
+            distTotal: totalDist.toFixed(1),
+            distCargo: totalCargo.toFixed(1),
+            distEmpty: totalEmpty.toFixed(1),
+            distTrailer: last.trailerActive ? totalDist.toFixed(1) : "",
+            distTrailerCargo: last.trailerActive ? totalCargo.toFixed(1) : "",
+            cargoName: cargoName,
+            weight: maxWeight > 0 ? maxWeight : "0",
+            weightTrailer: last.trailerActive ? (last.gTrailler || "0") : "",
+            tkm: tkmVal,
+            tkmTrailer: last.trailerActive ? (totalCargo * (parseFloat(last.gTrailler) || 0)).toFixed(1) : "",
+            eff: effVal.toFixed(1),
+            calcDetails: {
+                vv: totalCargo.toFixed(1),
+                zv: totalDist.toFixed(1),
+                v: maxWeight.toFixed(1),
+                mv: maxPayload.toFixed(1),
+                kf1: kf1.toFixed(2),
+                kf2: kf2.toFixed(2),
+                eff: effVal.toFixed(1)
+            },
+            fuelStart: "",
+            oilStart: "",
+            fuelAdded: "",
+            oilAdded: "",
+            fuelEnd: "",
+            oilEnd: "",
+            fuelFact: "",
+            oilFactDetails: "",
+            fuelNorm: totalQ.toFixed(1),
+            oilNormDetails: oilFormat,
+            save: "",
+            oilSave: "",
+            over: "",
+            oilOver: ""
+        };
+
+        currentEntries.push(newEntry);
+        localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+        renderTable();
+        alert("Запис успішно додано до Книги обліку!");
+    }
+
+    function showEffDetails(idx) {
+        const item = currentEntries[idx];
+        if (!item) return;
+
+        const details = calculateKfForEntry(item);
+
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="font-size: 11px; margin-bottom: 8px; color: #555;">
+                <b>Вихідні дані з запису від ${item.date || '-'}:</b>
+            </div>
+            <div class="calc-step">
+                <b>1. Коефіцієнт пробігу з вантажем (K_f1):</b><br>
+                V_v (Відстань з вантажем) = <b>${details.vv} км</b><br>
+                Z_v (Загальна відстань) = <b>${details.zv} км</b><br>
+                <div style="margin-top:4px;">
+                    <span class="calc-formula">K_f1 = V_v / Z_v = ${details.vv} / ${details.zv} = ${details.kf1}</span>
+                </div>
+            </div>
+            <div class="calc-step">
+                <b>2. Коефіцієнт використання вантажопідйомності (K_f2):</b><br>
+                V (Вага вантажу) = <b>${details.v} т</b><br>
+                M_v (Макс. вантажопідйомність) = <b>${details.mv} т</b><br>
+                <div style="margin-top:4px;">
+                    <span class="calc-formula">K_f2 = V / M_v = ${details.v} / ${details.mv} = ${details.kf2}</span>
+                </div>
+            </div>
+            <div class="calc-step" style="border-left-color: #2ecc71; background: #e8f8f5;">
+                <b>3. Загальний показник ефективності (K_f):</b><br>
+                <div style="margin-top:4px;">
+                    <span class="calc-formula" style="color: #27ae60;">K_f = (K_f1 × K_f2) × 100%</span><br>
+                    <span class="calc-formula" style="color: #27ae60;">K_f = (${details.kf1} × ${details.kf2}) × 100% = ${details.eff}%</span>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('effModal').style.display = 'flex';
+    }
+
+    function closeEffModal(e) {
+        if (!e || e.target.id === 'effModal' || e.target.className === 'modal-close') {
+            document.getElementById('effModal').style.display = 'none';
         }
     }
 
     function deleteRow(idx) {
         if (confirm("Видалити цей рядок?")) {
             currentEntries.splice(idx, 1);
+            localStorage.setItem('book_entries', JSON.stringify(currentEntries));
             renderTable();
         }
     }
@@ -388,112 +514,103 @@
     function clearCurrentBook() {
         if (confirm("Очистити поточну таблицю книги обліку?")) {
             currentEntries = [];
+            localStorage.setItem('book_entries', JSON.stringify(currentEntries));
             renderTable();
         }
     }
 
-    // --- РОБОТА З DJANGO БАЗОЮ ДАНИХ ---
-    function fetchArchivesFromDB() {
-        const formData = new FormData();
-        formData.append('action', 'fetch_books');
-
-        fetch('/api/book/', { method: 'POST', body: formData })
-            .then(res => res.json())
-            .then(res => {
-                const container = document.getElementById('archiveList');
-                container.innerHTML = '';
-                loadedDbBooks = {};
-
-                if (res.success && res.data.length > 0) {
-                    res.data.forEach(item => {
-                        loadedDbBooks[item.id] = item;
-                        let entriesArr = [];
-                        try { entriesArr = JSON.parse(item.entries_data); } catch(e){}
-
-                        const li = document.createElement('li');
-                        li.className = 'archive-item';
-                        li.innerHTML = `
-                            <div>
-                                <strong>📖 ${item.title}</strong>
-                                <br><small style="color:#bdc3c7;">⏱️ ${new Date(item.created_at).toLocaleString('uk-UA')} | ТЗ: ${item.car_title || '-'} | Записів: <b>${entriesArr.length}</b></small>
-                            </div>
-                            <div style="display:flex; gap:4px;">
-                                <button class="btn btn-blue" style="padding:3px 6px; font-size:10px; margin:0;" onclick="loadArchiveFromDB(${item.id})">📂 Відновити</button>
-                                <button class="btn" style="padding:3px 6px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteArchiveFromDB(${item.id})">🗑️</button>
-                            </div>
-                        `;
-                        container.appendChild(li);
-                    });
-                } else {
-                    container.innerHTML = `<li style="color: #aaa; font-size: 11px;">Немає збережених книг у базі даних.</li>`;
-                }
-            })
-            .catch(err => console.error("Помилка завантаження архіву:", err));
-    }
-
-    function saveArchiveToDB() {
+    function saveArchive() {
         if (currentEntries.length === 0) {
             alert("Поточна книга порожня!");
             return;
         }
 
         const carTitle = document.getElementById('car_title_display').innerText.trim();
-        let archiveTitle = prompt("Введіть назву книги для збереження у базу даних:", `Книга (${carTitle}) - ${new Date().toLocaleDateString('uk-UA')}`);
+        let archiveTitle = prompt("Введіть назву для архівного запису книги:", `Книга (${carTitle}) - ${new Date().toLocaleDateString('uk-UA')}`);
         if (!archiveTitle) return;
 
-        const formData = new FormData();
-        formData.append('action', 'save_book');
-        formData.append('title', archiveTitle);
-        formData.append('car_title', document.getElementById('car_title_display').innerHTML.trim());
-        formData.append('car_plate', document.getElementById('car_plate_display').innerText.trim());
-        formData.append('fuel_type', document.getElementById('fuel_type_display').innerText.trim());
-        formData.append('oil_type', document.getElementById('oil_type_display').innerText.trim());
-        formData.append('entries_data', JSON.stringify(currentEntries));
+        const archives = JSON.parse(localStorage.getItem('book_archives')) || [];
+        archives.unshift({
+            id: Date.now(),
+            date: new Date().toLocaleString('uk-UA'),
+            title: archiveTitle,
+            carTitle: document.getElementById('car_title_display').innerHTML.trim(),
+            carPlate: document.getElementById('car_plate_display').innerText.trim(),
+            fuelType: document.getElementById('fuel_type_display').innerText.trim(),
+            oilType: document.getElementById('oil_type_display').innerText.trim(),
+            entries: currentEntries
+        });
 
-        fetch('/api/book/', { method: 'POST', body: formData })
-            .then(res => res.json())
-            .then(res => {
-                if (res.success) {
-                    alert("Книгу успішно збережено у вашому акаунті в базі даних!");
-                    fetchArchivesFromDB();
-                } else {
-                    alert("Помилка збереження в базу даних!");
-                }
-            });
+        localStorage.setItem('book_archives', JSON.stringify(archives));
+        renderArchives();
+        alert("Книгу успішно збережено в архів!");
     }
 
-    function loadArchiveFromDB(id) {
-        const item = loadedDbBooks[id];
-        if (!item) return;
+    function renderArchives() {
+        const archives = JSON.parse(localStorage.getItem('book_archives')) || [];
+        const container = document.getElementById('archiveList');
+        container.innerHTML = '';
 
-        if (confirm(`Відновити книгу "${item.title}" з бази даних?`)) {
-            try { currentEntries = JSON.parse(item.entries_data); } catch(e){ currentEntries = []; }
+        if (archives.length === 0) {
+            container.innerHTML = `<li style="color: #aaa; font-size: 11px;">Немає збережених книг</li>`;
+            return;
+        }
 
-            document.getElementById('car_title_display').innerHTML = item.car_title || '';
-            document.getElementById('car_plate_display').innerText = item.car_plate || '';
-            document.getElementById('fuel_type_display').innerText = item.fuel_type || '';
-            document.getElementById('oil_type_display').innerText = item.oil_type || '';
+        archives.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'archive-item';
+            li.innerHTML = `
+                <div>
+                    <strong>${item.title}</strong>
+                    <br><small style="color:#bdc3c7;">⏱️ ${item.date} | Записів: <b>${item.entries.length}</b></small>
+                </div>
+                <div style="display:flex; gap:4px;">
+                    <button class="btn btn-blue" style="padding:3px 6px; font-size:10px; margin:0;" onclick="loadArchive(${item.id})">📂 Відновити</button>
+                    <button class="btn" style="padding:3px 6px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteArchive(${item.id})">🗑️</button>
+                </div>
+            `;
+            container.appendChild(li);
+        });
+    }
 
-            saveHeaderInfo();
+    function loadArchive(id) {
+        const archives = JSON.parse(localStorage.getItem('book_archives')) || [];
+        const rec = archives.find(a => a.id === id);
+        if (!rec) return;
+
+        if (confirm(`Відновити збережену книгу "${rec.title}"? Поточні незбережені дані будуть замінені.`)) {
+            currentEntries = rec.entries || [];
+            localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+
+            if (rec.carTitle) {
+                document.getElementById('car_title_display').innerHTML = rec.carTitle;
+                localStorage.setItem('book_car_title', rec.carTitle);
+            }
+            if (rec.carPlate) {
+                document.getElementById('car_plate_display').innerText = rec.carPlate;
+                localStorage.setItem('book_car_plate', rec.carPlate);
+            }
+            if (rec.fuelType) {
+                document.getElementById('fuel_type_display').innerText = rec.fuelType;
+                localStorage.setItem('book_fuel_type', rec.fuelType);
+            }
+            if (rec.oilType) {
+                document.getElementById('oil_type_display').innerText = rec.oilType;
+                localStorage.setItem('book_oil_type', rec.oilType);
+            }
+
             renderTable();
         }
     }
 
-    function deleteArchiveFromDB(id) {
-        if (confirm("Видалити цю книгу з бази даних?")) {
-            const formData = new FormData();
-            formData.append('action', 'delete_book');
-            formData.append('book_id', id);
-
-            fetch('/api/book/', { method: 'POST', body: formData })
-                .then(res => res.json())
-                .then(res => {
-                    if (res.success) fetchArchivesFromDB();
-                    else alert("Помилка видалення запису!");
-                });
+    function deleteArchive(id) {
+        if (confirm("Видалити цю книгу з архіву?")) {
+            let archives = JSON.parse(localStorage.getItem('book_archives')) || [];
+            archives = archives.filter(a => a.id !== id);
+            localStorage.setItem('book_archives', JSON.stringify(archives));
+            renderArchives();
         }
     }
 </script>
-
 </body>
 </html>
