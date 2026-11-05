@@ -5,14 +5,24 @@ class MainAppConfig(AppConfig):
     name = 'main_app'
 
     def ready(self):
+        # Автоматичне створення адміна при запуску на новій БД PostgreSQL
         try:
             from django.contrib.auth.models import User
-            user = User.objects.filter(email='sergijmarcinisen1@gmail.com').first()
-            if user:
+            
+            # Якщо користувача з ім'ям 'admin' ще немає — створюємо його
+            if not User.objects.filter(username='admin').exists():
+                User.objects.create_superuser(
+                    username='admin',
+                    email='sergijmarcinisen1@gmail.com',
+                    password='admin12345'
+                )
+                print("Суперкористувача 'admin' успішно створено!")
+            else:
+                # Якщо він вже існує — переконуємося, що в нього є всі права
+                user = User.objects.get(username='admin')
                 user.is_staff = True
                 user.is_superuser = True
-                user.set_password('admin12345')  # <--- Встановлює новий пароль "admin12345"
+                user.set_password('admin12345')
                 user.save()
-                print("Пароль та права успішно оновлено!")
         except Exception:
             pass
