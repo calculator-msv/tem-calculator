@@ -84,12 +84,16 @@ if DATABASE_URL:
     }
 else:
     # Конфігурація для локальної розробки на ПК (SQLite)
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+   DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "fuelbook",
+        "USER": "fuel_user",
+        "PASSWORD": "postgres",
+        "HOST": "localhost",
+        "PORT": "5432",
     }
+}
 
 
 # Sessions Configuration (Щоб сесія не скидалася при засинанні контейнера)
