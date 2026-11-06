@@ -99,6 +99,7 @@ td[contenteditable="true"]{ outline:none; }
         </div>
     </div>
     <div class="screen-note" id="emptyNote"></div>
+    <div class="screen-note" id="saveNote"></div>
 
     <div class="sheet-wrap"><div class="sheet">
         <!-- верхня шапка (як у Word) -->
@@ -169,12 +170,157 @@ td[contenteditable="true"]{ outline:none; }
 </div>
 
 <script>
-    let currentEntries = JSON.parse(localStorage.getItem('book_entries')) || [];
+    // Уся книга обліку зберігається на сервері (база Neon): поточна книга — через fetch_state / save_state,
+    // архів — через fetch_books / save_book / delete_book. У браузері нічого не залишається.
+    let currentEntries = [];
+    let bookHeader = { car_title: '', car_plate: '', fuel_type: '', oil_type: '' };
+    let archivesCache = [];
+    let stateLoaded = false;   // поки збережений стан не завантажено, на сервер нічого не пишемо
+    let saveTimer = null;
 
-    window.onload = function() {
-        renderTable();
-        renderArchives();
+    function escHtml(v) {
+        return String(v === undefined || v === null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // у назві авто дозволяємо лише жирний шрифт (<b>), решту тегів прибираємо
+    function sanitizeTitle(html) {
+        return String(html || '').replace(/<(?!\/?b>)[^>]*>/gi, '');
+    }
+
+    function setSaveNote(msg) {
+        const el = document.getElementById('saveNote');
+        if (el) el.innerText = msg || '';
+    }
+
+    function apiBook(fields, keepalive) {
+        const fd = new FormData();
+        Object.keys(fields).forEach(k => fd.append(k, fields[k]));
+        return fetch('/api/book/', { method: 'POST', body: fd, keepalive: !!keepalive }).then(r => r.json());
+    }
+
+    function parseEntries(raw) {
+        try {
+            const v = JSON.parse(raw);
+            return Array.isArray(v) ? v : [];
+        } catch (err) {
+            return [];
+        }
+    }
+
+    async function loadState() {
+        try {
+            const res = await apiBook({ action: 'fetch_state' });
+            if (res.success) {
+                const d = res.data;
+                bookHeader = {
+                    car_title: d.car_title || '', car_plate: d.car_plate || '',
+                    fuel_type: d.fuel_type || '', oil_type: d.oil_type || ''
+                };
+                currentEntries = parseEntries(d.entries_data);
+                stateLoaded = true;
+                return;
+            }
+        } catch (err) { /* показуємо повідомлення нижче */ }
+        setSaveNote('⚠️ Не вдалося завантажити книгу із сервера. Зміни не зберігаються — оновіть сторінку.');
+    }
+
+    // збереження поточної книги на сервер (із затримкою, щоб не слати запит на кожен символ)
+    function persistState() {
+        if (!stateLoaded) return;
+        clearTimeout(saveTimer);
+        setSaveNote('Збереження…');
+        saveTimer = setTimeout(() => sendState(false), 600);
+    }
+
+    function sendState(keepalive) {
+        saveTimer = null;
+        return apiBook({
+            action: 'save_state',
+            car_title: bookHeader.car_title, car_plate: bookHeader.car_plate,
+            fuel_type: bookHeader.fuel_type, oil_type: bookHeader.oil_type,
+            entries_data: JSON.stringify(currentEntries)
+        }, keepalive).then(res => {
+            setSaveNote(res.success
+                ? 'Збережено на сервері: ' + new Date().toLocaleTimeString('uk-UA')
+                : '⚠️ ' + (res.message || 'Не вдалося зберегти книгу'));
+            return !!res.success;
+        }).catch(() => {
+            setSaveNote('⚠️ Немає зв’язку із сервером: зміни ще не збережено.');
+            return false;
+        });
+    }
+
+    // якщо користувач закриває сторінку, не дочекавшись затримки — відправляємо одразу
+    function flushState() {
+        if (saveTimer) {
+            clearTimeout(saveTimer);
+            sendState(true);
+        }
+    }
+
+    // Одноразове перенесення даних, які раніше жили лише в браузері (localStorage), на сервер.
+    async function migrateLocalData() {
+        if (!stateLoaded) return;
+        const headerKeys = ['book_car_title', 'book_car_plate', 'book_fuel_type', 'book_oil_type'];
+        let moved = [];
+
+        // 1) поточна книга — лише якщо на сервері вона ще порожня
+        try {
+            const localEntries = parseEntries(localStorage.getItem('book_entries'));
+            const hasLocal = localEntries.length > 0 || headerKeys.some(k => localStorage.getItem(k));
+            const serverEmpty = currentEntries.length === 0 &&
+                !bookHeader.car_title && !bookHeader.car_plate && !bookHeader.fuel_type && !bookHeader.oil_type;
+            if (hasLocal && serverEmpty) {
+                currentEntries = localEntries;
+                bookHeader = {
+                    car_title: localStorage.getItem('book_car_title') || '',
+                    car_plate: localStorage.getItem('book_car_plate') || '',
+                    fuel_type: localStorage.getItem('book_fuel_type') || '',
+                    oil_type: localStorage.getItem('book_oil_type') || ''
+                };
+                if (await sendState(false)) {
+                    localStorage.removeItem('book_entries');
+                    headerKeys.forEach(k => localStorage.removeItem(k));
+                    moved.push('поточну книгу');
+                }
+            }
+        } catch (err) { /* локальні дані пошкоджені — пропускаємо */ }
+
+        // 2) архів: від найстаріших до найновіших, після кожного успіху прибираємо запис із браузера
+        try {
+            const archives = JSON.parse(localStorage.getItem('book_archives')) || [];
+            if (Array.isArray(archives) && archives.length > 0) {
+                const remaining = archives.slice();
+                let count = 0;
+                for (let i = archives.length - 1; i >= 0; i--) {
+                    const a = archives[i] || {};
+                    const res = await apiBook({
+                        action: 'save_book', title: a.title || 'Без назви',
+                        car_title: a.carTitle || '', car_plate: a.carPlate || '',
+                        fuel_type: a.fuelType || '', oil_type: a.oilType || '',
+                        entries_data: JSON.stringify(Array.isArray(a.entries) ? a.entries : [])
+                    });
+                    if (!res.success) break;
+                    remaining.splice(i, 1);
+                    count++;
+                    localStorage.setItem('book_archives', JSON.stringify(remaining));
+                }
+                if (remaining.length === 0) localStorage.removeItem('book_archives');
+                if (count > 0) moved.push('архівних книг: ' + count);
+            }
+        } catch (err) { /* без зв'язку спробуємо наступного разу */ }
+
+        if (moved.length > 0) setSaveNote('Дані з браузера перенесено на сервер: ' + moved.join(', ') + '.');
+    }
+
+    window.onload = async function() {
         setupHeaderListeners();
+        await loadState();
+        await migrateLocalData();
+        renderTable(true);   // перше малювання: нічого не змінилось, зберігати не потрібно
+        await loadArchives();
+        window.addEventListener('pagehide', flushState);
     };
 
     function setupHeaderListeners() {
@@ -185,10 +331,11 @@ td[contenteditable="true"]{ outline:none; }
     }
 
     function saveHeaderInfo() {
-        localStorage.setItem('book_car_title', document.getElementById('car_title_display').innerHTML.trim());
-        localStorage.setItem('book_car_plate', document.getElementById('car_plate_display').innerText.trim());
-        localStorage.setItem('book_fuel_type', document.getElementById('fuel_type_display').innerText.trim());
-        localStorage.setItem('book_oil_type', document.getElementById('oil_type_display').innerText.trim());
+        bookHeader.car_title = sanitizeTitle(document.getElementById('car_title_display').innerHTML.trim());
+        bookHeader.car_plate = document.getElementById('car_plate_display').innerText.trim();
+        bookHeader.fuel_type = document.getElementById('fuel_type_display').innerText.trim();
+        bookHeader.oil_type = document.getElementById('oil_type_display').innerText.trim();
+        persistState();
     }
 
     function calculateKfForEntry(e) {
@@ -242,19 +389,14 @@ td[contenteditable="true"]{ outline:none; }
     }
     window.addEventListener('beforeprint', fitCells);
 
-    function renderTable() {
+    function renderTable(skipSave) {
         const tbody = document.getElementById('bookBody');
         tbody.innerHTML = '';
 
-        const savedTitle = localStorage.getItem('book_car_title');
-        const savedPlate = localStorage.getItem('book_car_plate');
-        const savedFuel = localStorage.getItem('book_fuel_type');
-        const savedOil = localStorage.getItem('book_oil_type');
-
-        if (savedTitle && savedTitle !== '-') document.getElementById('car_title_display').innerHTML = savedTitle;
-        if (savedPlate && savedPlate !== '-') document.getElementById('car_plate_display').innerText = savedPlate;
-        if (savedFuel && savedFuel !== '-') document.getElementById('fuel_type_display').innerText = savedFuel;
-        if (savedOil && savedOil !== '-') document.getElementById('oil_type_display').innerText = savedOil;
+        document.getElementById('car_title_display').innerHTML = sanitizeTitle(bookHeader.car_title);
+        document.getElementById('car_plate_display').innerText = bookHeader.car_plate;
+        document.getElementById('fuel_type_display').innerText = bookHeader.fuel_type;
+        document.getElementById('oil_type_display').innerText = bookHeader.oil_type;
 
         document.getElementById('emptyNote').innerText = currentEntries.length === 0
             ? 'Книга порожня. Натисніть "Додати з Дорожнього листа" або введіть дані вручну в рядки таблиці.'
@@ -289,7 +431,7 @@ td[contenteditable="true"]{ outline:none; }
             tbody.appendChild(tr);
         }
 
-        localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+        if (!skipSave) persistState();
         fitCells();
     }
 
@@ -304,7 +446,7 @@ td[contenteditable="true"]{ outline:none; }
             return;
         }
 
-        localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+        persistState();
         fitCells();
     }
 
@@ -401,16 +543,16 @@ td[contenteditable="true"]{ outline:none; }
 
         if (extractedTitle) {
             document.getElementById('car_title_display').innerHTML = fullTitleHTML;
-            localStorage.setItem('book_car_title', fullTitleHTML);
+            bookHeader.car_title = sanitizeTitle(fullTitleHTML);
         }
         if (extractedPlate && extractedPlate !== "Б/Н") {
             document.getElementById('car_plate_display').innerText = extractedPlate;
-            localStorage.setItem('book_car_plate', extractedPlate);
+            bookHeader.car_plate = extractedPlate;
         }
 
         if (last.fuelType) {
             document.getElementById('fuel_type_display').innerText = last.fuelType;
-            localStorage.setItem('book_fuel_type', last.fuelType);
+            bookHeader.fuel_type = last.fuelType;
         }
 
         const newEntry = {
@@ -453,7 +595,7 @@ td[contenteditable="true"]{ outline:none; }
         };
 
         currentEntries.push(newEntry);
-        localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+        persistState();
         renderTable();
         alert("Запис успішно додано до Книги обліку!");
     }
@@ -506,7 +648,7 @@ td[contenteditable="true"]{ outline:none; }
     function deleteRow(idx) {
         if (confirm("Видалити цей рядок?")) {
             currentEntries.splice(idx, 1);
-            localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+            persistState();
             renderTable();
         }
     }
@@ -514,12 +656,22 @@ td[contenteditable="true"]{ outline:none; }
     function clearCurrentBook() {
         if (confirm("Очистити поточну таблицю книги обліку?")) {
             currentEntries = [];
-            localStorage.setItem('book_entries', JSON.stringify(currentEntries));
+            persistState();
             renderTable();
         }
     }
 
-    function saveArchive() {
+    async function loadArchives() {
+        try {
+            const res = await apiBook({ action: 'fetch_books' });
+            archivesCache = res.success ? res.data : [];
+        } catch (err) {
+            archivesCache = [];
+        }
+        renderArchives();
+    }
+
+    async function saveArchive() {
         if (currentEntries.length === 0) {
             alert("Поточна книга порожня!");
             return;
@@ -529,40 +681,44 @@ td[contenteditable="true"]{ outline:none; }
         let archiveTitle = prompt("Введіть назву для архівного запису книги:", `Книга (${carTitle}) - ${new Date().toLocaleDateString('uk-UA')}`);
         if (!archiveTitle) return;
 
-        const archives = JSON.parse(localStorage.getItem('book_archives')) || [];
-        archives.unshift({
-            id: Date.now(),
-            date: new Date().toLocaleString('uk-UA'),
-            title: archiveTitle,
-            carTitle: document.getElementById('car_title_display').innerHTML.trim(),
-            carPlate: document.getElementById('car_plate_display').innerText.trim(),
-            fuelType: document.getElementById('fuel_type_display').innerText.trim(),
-            oilType: document.getElementById('oil_type_display').innerText.trim(),
-            entries: currentEntries
-        });
-
-        localStorage.setItem('book_archives', JSON.stringify(archives));
-        renderArchives();
-        alert("Книгу успішно збережено в архів!");
+        try {
+            const res = await apiBook({
+                action: 'save_book',
+                title: archiveTitle,
+                car_title: sanitizeTitle(document.getElementById('car_title_display').innerHTML.trim()),
+                car_plate: document.getElementById('car_plate_display').innerText.trim(),
+                fuel_type: document.getElementById('fuel_type_display').innerText.trim(),
+                oil_type: document.getElementById('oil_type_display').innerText.trim(),
+                entries_data: JSON.stringify(currentEntries)
+            });
+            if (res.success) {
+                await loadArchives();
+                alert("Книгу успішно збережено в архів!");
+            } else {
+                alert(res.message || "Не вдалося зберегти книгу в архів.");
+            }
+        } catch (err) {
+            alert("Помилка зв'язку із сервером. Архів не збережено.");
+        }
     }
 
     function renderArchives() {
-        const archives = JSON.parse(localStorage.getItem('book_archives')) || [];
         const container = document.getElementById('archiveList');
         container.innerHTML = '';
 
-        if (archives.length === 0) {
+        if (archivesCache.length === 0) {
             container.innerHTML = `<li style="color: #aaa; font-size: 11px;">Немає збережених книг</li>`;
             return;
         }
 
-        archives.forEach(item => {
+        archivesCache.forEach(item => {
             const li = document.createElement('li');
             li.className = 'archive-item';
+            const dateStr = item.created_at ? new Date(item.created_at).toLocaleString('uk-UA') : '';
             li.innerHTML = `
                 <div>
-                    <strong>${item.title}</strong>
-                    <br><small style="color:#bdc3c7;">⏱️ ${item.date} | Записів: <b>${item.entries.length}</b></small>
+                    <strong>${escHtml(item.title)}</strong>
+                    <br><small style="color:#bdc3c7;">⏱️ ${dateStr} | Записів: <b>${parseEntries(item.entries_data).length}</b></small>
                 </div>
                 <div style="display:flex; gap:4px;">
                     <button class="btn btn-blue" style="padding:3px 6px; font-size:10px; margin:0;" onclick="loadArchive(${item.id})">📂 Відновити</button>
@@ -574,42 +730,32 @@ td[contenteditable="true"]{ outline:none; }
     }
 
     function loadArchive(id) {
-        const archives = JSON.parse(localStorage.getItem('book_archives')) || [];
-        const rec = archives.find(a => a.id === id);
+        const rec = archivesCache.find(a => a.id === id);
         if (!rec) return;
 
         if (confirm(`Відновити збережену книгу "${rec.title}"? Поточні незбережені дані будуть замінені.`)) {
-            currentEntries = rec.entries || [];
-            localStorage.setItem('book_entries', JSON.stringify(currentEntries));
-
-            if (rec.carTitle) {
-                document.getElementById('car_title_display').innerHTML = rec.carTitle;
-                localStorage.setItem('book_car_title', rec.carTitle);
-            }
-            if (rec.carPlate) {
-                document.getElementById('car_plate_display').innerText = rec.carPlate;
-                localStorage.setItem('book_car_plate', rec.carPlate);
-            }
-            if (rec.fuelType) {
-                document.getElementById('fuel_type_display').innerText = rec.fuelType;
-                localStorage.setItem('book_fuel_type', rec.fuelType);
-            }
-            if (rec.oilType) {
-                document.getElementById('oil_type_display').innerText = rec.oilType;
-                localStorage.setItem('book_oil_type', rec.oilType);
-            }
-
-            renderTable();
+            currentEntries = parseEntries(rec.entries_data);
+            bookHeader = {
+                car_title: rec.car_title || '', car_plate: rec.car_plate || '',
+                fuel_type: rec.fuel_type || '', oil_type: rec.oil_type || ''
+            };
+            renderTable();   // перемальовує таблицю та шапку й зберігає поточну книгу на сервері
         }
     }
 
-    function deleteArchive(id) {
-        if (confirm("Видалити цю книгу з архіву?")) {
-            let archives = JSON.parse(localStorage.getItem('book_archives')) || [];
-            archives = archives.filter(a => a.id !== id);
-            localStorage.setItem('book_archives', JSON.stringify(archives));
-            renderArchives();
+    async function deleteArchive(id) {
+        if (!confirm("Видалити цю книгу з архіву?")) return;
+        try {
+            const res = await apiBook({ action: 'delete_book', book_id: id });
+            if (!res.success) {
+                alert(res.message || "Не вдалося видалити книгу.");
+                return;
+            }
+        } catch (err) {
+            alert("Помилка зв'язку із сервером.");
+            return;
         }
+        await loadArchives();
     }
 </script>
 </body>
