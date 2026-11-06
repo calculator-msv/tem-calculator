@@ -1,10 +1,13 @@
 import json
+import math
+import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from .models import Vehicle, City, UserCoeff, Calculation, UserBook, UserNote, UserLibrary
 
 
@@ -98,6 +101,156 @@ def map_view(request):
 @login_required
 def preview_view(request):
     return render(request, 'main_app/preview.html')
+
+
+
+# =====================================================================
+# РОЗРАХУНОК ПАЛЬНОГО НА СЕРВЕРІ (єдине місце з формулою)
+# =====================================================================
+# Чи множити коефіцієнт (1 + 0,01·K) також на транспортну роботу Hw·W.
+#   False – як рахував калькулятор у браузері до перенесення на сервер:
+#           Q = 0,01·Hs·S·(1 + 0,01·K) + 0,01·Hw·W
+#   True  – за формулою з методики та реферату:
+#           Q = 0,01·(Hs·S + Hw·W)·(1 + 0,01·K)
+# Оберіть варіант, який відповідає чинному наказу (див. реферат, формула 2.1).
+K_APPLIES_TO_TRANSPORT_WORK = False
+
+MAX_ROWS = 500
+
+
+def _num(value, default=0.0):
+    """Безпечне перетворення в число (приймає кому, відкидає NaN/inf)."""
+    try:
+        x = float(str(value).replace(',', '.'))
+    except (TypeError, ValueError):
+        return default
+    return x if math.isfinite(x) else default
+
+
+def _coeff_code(name):
+    """Код коефіцієнта з назви, напр. 'Аеродинамічний опір (K4)' -> 'k4'."""
+    m = re.search(r'\(K(\d+)\)', name or '', re.IGNORECASE)
+    return 'k' + m.group(1) if m else None
+
+
+def get_user_coeff_summary(user):
+    """Повертає (базовий K, K4, K5, список активних коефіцієнтів) з БД користувача.
+    K4 (аеродинаміка) та K5 (позаміська траса) застосовуються лише до ділянок «Траса»."""
+    base = k4 = k5 = 0.0
+    active = []
+    for c in UserCoeff.objects.filter(user=user).order_by('id'):
+        val = abs(_num(c.value))
+        code = _coeff_code(c.name)
+        if code == 'k4':
+            k4 = val
+        if code == 'k5':
+            k5 = val
+        if val > 0:
+            if c.type == 'minus':
+                active.append(f"{c.name}: -{val:g}%")
+                if code != 'k5':
+                    base -= val
+            else:
+                active.append(f"{c.name}: +{val:g}%")
+                if code != 'k4':
+                    base += val
+    return base, k4, k5, active
+
+
+def calculate_fuel(vehicle, rows, base_k, k4, k5, trailer_mass=0.0):
+    """Розрахунок нормативної витрати пального й олив по ділянках маршруту."""
+    hs = _num(vehicle.hs)
+    hw = _num(vehicle.hw)
+    trailer = max(_num(trailer_mass), 0.0)
+
+    out_rows = []
+    total_q = dist_city = dist_out = max_weight = 0.0
+
+    for row in rows[:MAX_ROWS]:
+        dist = max(_num(row.get('dist')), 0.0)
+        weight = max(_num(row.get('weight')), 0.0)
+        is_hwy = bool(row.get('isHighway'))
+
+        ind_k = 0.0 if is_hwy else _num(row.get('indK'))
+        sys_k = base_k + ((k4 - k5) if is_hwy else 0.0)   # без міської надбавки
+        row_k = sys_k + ind_k
+        work = (weight + trailer) * dist                  # т·км
+
+        if K_APPLIES_TO_TRANSPORT_WORK:
+            q = 0.01 * (hs * dist + hw * work) * (1 + 0.01 * row_k)
+        else:
+            q = 0.01 * hs * dist * (1 + 0.01 * row_k) + 0.01 * hw * work
+
+        total_q += q
+        max_weight = max(max_weight, weight)
+        if is_hwy:
+            dist_out += dist
+        else:
+            dist_city += dist
+
+        out_rows.append({
+            'route': str(row.get('route', ''))[:255],
+            'cargo': str(row.get('cargo', '-'))[:255],
+            'dist': dist,
+            'weight': weight,
+            'indK': ind_k,
+            'isHighway': is_hwy,
+            'row_sys_k': sys_k,
+            'row_k': row_k,
+            'q': round(q, 6),
+        })
+
+    return {
+        'rows': out_rows,
+        'total_q': round(total_q, 6),
+        'dist_city': round(dist_city, 3),
+        'dist_out': round(dist_out, 3),
+        'max_weight': max_weight,
+        'oils': {
+            'om': round(total_q * _num(vehicle.om) / 100, 6),
+            'ot': round(total_q * _num(vehicle.ot) / 100, 6),
+            'os': round(total_q * _num(vehicle.os) / 100, 6),
+            'op': round(total_q * _num(vehicle.op) / 100, 6),
+        },
+    }
+
+
+def run_calculation(user, car_id, rows, trailer_mass):
+    """Спільна логіка для calc_api та збереження розрахунку. Повертає (vehicle, result) або (None, None)."""
+    try:
+        vehicle = Vehicle.objects.filter(id=int(car_id), user=user).first()
+    except (TypeError, ValueError):
+        vehicle = None
+    if vehicle is None or not isinstance(rows, list):
+        return None, None
+    base_k, k4, k5, active = get_user_coeff_summary(user)
+    result = calculate_fuel(vehicle, rows, base_k, k4, k5, trailer_mass)
+    result.update({'sys_k': base_k, 'k4': k4, 'k5': k5, 'active_coeffs': active})
+    return vehicle, result
+
+
+@login_required
+@require_POST
+def calc_api(request):
+    """POST /api/calc/  {car_id, trailer, rows:[{route,dist,cargo,weight,indK,isHighway}]}
+    CSRF-токен обов'язковий (заголовок X-CSRFToken)."""
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'message': 'Невалідний JSON'}, status=400)
+
+    vehicle, result = run_calculation(request.user, data.get('car_id'), data.get('rows'), data.get('trailer', 0))
+    if vehicle is None:
+        return JsonResponse({'success': False, 'message': 'Автомобіль не знайдено. Оберіть ТЗ зі свого автопарку.'}, status=400)
+
+    result['k_on_work'] = K_APPLIES_TO_TRANSPORT_WORK
+    result['car'] = {
+        'id': vehicle.id, 'name': vehicle.name, 'plate': vehicle.plate,
+        'hs': vehicle.hs, 'hw': vehicle.hw,
+        'om': vehicle.om, 'ot': vehicle.ot, 'os': vehicle.os, 'op': vehicle.op,
+    }
+    result['success'] = True
+    return JsonResponse(result)
 
 
 # --- API ДЛЯ БАЗИ МІСТ (cities.html) ---
@@ -239,11 +392,25 @@ def map_api(request):
             return JsonResponse({'success': True, 'data': routes})
 
         elif action == 'save_route':
+            details = request.POST.get('cities_json', '{}')
+            car, fuel, max_weight = None, 0.0, 0.0
+            try:
+                rows = json.loads(details)
+            except ValueError:
+                rows = None
+            # витрату пального рахує сервер, а не береться з браузера
+            if request.POST.get('car_id') and isinstance(rows, list):
+                car, result = run_calculation(request.user, request.POST.get('car_id'), rows, request.POST.get('trailer', 0))
+                if result:
+                    fuel, max_weight = result['total_q'], result['max_weight']
             route = Calculation.objects.create(
                 user=request.user,
+                car=car,
                 route=request.POST.get('name', 'Новий маршрут'),
-                distance=float(str(request.POST.get('total_dist', '0')).replace(' км', '').strip() or 0),
-                details=request.POST.get('cities_json', '{}')
+                distance=_num(str(request.POST.get('total_dist', '0')).replace(' км', '').strip()),
+                cargo=max_weight,
+                fuel_consumed=round(fuel, 2),
+                details=details
             )
             return JsonResponse({'success': True, 'id': route.id})
 
