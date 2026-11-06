@@ -49,3 +49,45 @@ class CalcApiTests(TestCase):
         self.client.logout()
         r = self.post({'car_id': self.car.id, 'rows': []})
         self.assertEqual(r.status_code, 302)
+
+
+class HistoryApiTests(TestCase):
+    """Маршрути карти, маршрути та поїздки калькулятора зберігаються окремо."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h@t.ua', email='h@t.ua', password='123456')
+        self.car = Vehicle.objects.create(user=self.user, name='УАЗ', hs=30, hw=1.3)
+        self.client.login(username='h@t.ua', password='123456')
+        self.rows = json.dumps([{'route': 'Хм - Кр', 'dist': 100, 'cargo': '-', 'weight': 0, 'indK': 0, 'isHighway': False}])
+
+    def api(self, **data):
+        return self.client.post('/api/map/', data).json()
+
+    def test_lists_are_independent(self):
+        self.assertTrue(self.api(action='save_route', name='З карти', total_dist='41.6 км',
+                                 cities_json='{"Хмельницький": 10}', segments_json='[]',
+                                 image_data='data:image/jpeg;base64,AAAA')['success'])
+        self.assertTrue(self.api(action='save_history', kind='route', name='Маршрут', rows=self.rows)['success'])
+        self.assertTrue(self.api(action='save_history', kind='trip', name='Поїздка', rows=self.rows, car_id=self.car.id)['success'])
+
+        maps = self.api(action='fetch_routes')['data']
+        routes = self.api(action='fetch_history', kind='route')['data']
+        trips = self.api(action='fetch_history', kind='trip')['data']
+        self.assertEqual([r['route'] for r in maps], ['З карти'])
+        self.assertEqual([r['route'] for r in routes], ['Маршрут'])
+        self.assertEqual([r['route'] for r in trips], ['Поїздка'])
+        self.assertTrue(maps[0]['has_image'])
+        self.assertAlmostEqual(trips[0]['fuel_consumed'], 30.0, places=2)
+
+    def test_trip_requires_car(self):
+        self.assertFalse(self.api(action='save_history', kind='trip', name='X', rows=self.rows)['success'])
+
+    def test_route_without_car_is_allowed(self):
+        self.assertTrue(self.api(action='save_history', kind='route', name='X', rows=self.rows)['success'])
+
+    def test_image_is_returned_separately(self):
+        rid = self.api(action='save_route', name='M', total_dist='1', cities_json='{}',
+                       image_data='data:image/jpeg;base64,AAAA')['id']
+        res = self.api(action='fetch_route_image', route_id=rid)
+        self.assertTrue(res['success'])
+        self.assertTrue(res['image_data'].startswith('data:image/'))
