@@ -39,8 +39,9 @@ class UserCoeffAdmin(admin.ModelAdmin):
 
 @admin.register(Calculation)
 class CalculationAdmin(admin.ModelAdmin):
-    list_display = ('route', 'distance', 'user', 'created_at')
-    list_filter = ('user', 'created_at')
+    list_display = ('route', 'kind', 'distance', 'fuel_consumed', 'user', 'created_at')
+    list_filter = ('kind', 'user', 'created_at')
+    exclude = ('image_data',)
 
 
 @admin.register(UserBook)
