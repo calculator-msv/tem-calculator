@@ -144,6 +144,10 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# Дозволений розмір POST-запиту: за замовчуванням 2,5 МБ, а PDF-документи бібліотеки
+# (до 16 МБ у Base64) та зображення маршрутів потребують більше.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
+
 LANGUAGE_CODE = 'uk-ua'
 TIME_ZONE = 'Europe/Kyiv'
 USE_I18N = True
