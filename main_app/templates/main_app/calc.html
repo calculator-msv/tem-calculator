@@ -138,12 +138,14 @@
         </table>
     </div>
 
-    <div style="display: flex; gap: 10px; margin-top: 20px;">
-        <button class="btn btn-green" style="font-size:16px; height:50px; flex: 2;" onclick="calculate()">ВИКОНАТИ РОЗРАХУНОК</button>
-        <button class="btn btn-purple" style="font-size:14px; height:50px; flex: 1;" onclick="saveCalculationRecord()">💾 ЗБЕРЕГТИ РОЗРАХУНОК</button>
-        <button class="btn" style="font-size:14px; height:50px; flex: 1; background:#c0392b; color:#fff;" onclick="clearRoute()">🧹 ОЧИСТИТИ МАРШРУТ</button>
+    <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+        <button class="btn btn-green" style="font-size:16px; height:50px; flex: 2 1 220px;" onclick="calculate()">ВИКОНАТИ РОЗРАХУНОК</button>
+        <button class="btn btn-purple" style="font-size:13px; height:50px; flex: 1 1 150px;" onclick="saveHistory('route')">🗂️ ЗБЕРЕГТИ МАРШРУТ</button>
+        <button class="btn btn-blue" style="font-size:13px; height:50px; flex: 1 1 150px;" onclick="saveHistory('trip')">🚗 ЗБЕРЕГТИ ПОЇЗДКУ</button>
+        <button class="btn" style="font-size:13px; height:50px; flex: 1 1 150px; background:#c0392b; color:#fff;" onclick="clearRoute()">🧹 ОЧИСТИТИ МАРШРУТ</button>
     </div>
 
+    <div id="no_car_note" style="display:none; margin-top:15px; padding:10px; border-radius:6px; background:rgba(241,196,15,0.15); color:#f1c40f; font-size:12px;">ℹ️ Авто не вибрано: пальне не розраховується, але маршрут можна зберегти в «Історію маршрутів». Щоб зберегти поїздку з розрахунком, оберіть автомобіль.</div>
     <div id="calc_error" style="display:none; margin-top:15px; padding:10px; border-radius:6px; background:rgba(231,76,60,0.25); color:#ff9b93; font-weight:bold; font-size:12px;"></div>
 
     <div id="results" class="results">
@@ -158,9 +160,18 @@
     </div>
 
     <div class="calc-archive-panel">
-        <h4 style="margin: 0 0 10px 0; color: #f1c40f;">💾 Збережені розрахунки в БД (Акаунт: {{ user.username|default:"Гість" }})</h4>
-        <ul id="calcArchiveList" class="calc-archive-list">
-            <li style="color: #aaa; font-size: 11px;">Завантаження з бази даних...</li>
+        <h4 style="margin: 0 0 4px 0; color: #f1c40f;">🗂️ Історія маршрутів</h4>
+        <div style="font-size:11px; color:#bdc3c7;">Лише таблиця ділянок, без авто та розрахунку. Акаунт: {{ user.username|default:"Гість" }}</div>
+        <ul id="routeHistoryList" class="calc-archive-list">
+            <li style="color: #aaa; font-size: 11px;">Завантаження...</li>
+        </ul>
+    </div>
+
+    <div class="calc-archive-panel">
+        <h4 style="margin: 0 0 4px 0; color: #f1c40f;">🚗 Історія поїздок</h4>
+        <div style="font-size:11px; color:#bdc3c7;">Маршрут + автомобіль + розрахунок пального для дорожнього листа.</div>
+        <ul id="tripHistoryList" class="calc-archive-list">
+            <li style="color: #aaa; font-size: 11px;">Завантаження...</li>
         </ul>
     </div>
 </div>
@@ -295,9 +306,7 @@
 
         const defaultOpt = document.createElement('option');
         defaultOpt.value = "";
-        defaultOpt.innerText = "-- Виберіть ТЗ --";
-        defaultOpt.disabled = true;
-        defaultOpt.hidden = true;
+        defaultOpt.innerText = "— Без авто (лише маршрут) —";
         select.appendChild(defaultOpt);
 
         let validRecentIds = recentCarIds.filter(id => id && cars[id] && cars[id].name);
@@ -649,9 +658,12 @@
 
         if (!carSelect.value || !car || !car.db_id) {
             document.getElementById('results').style.display = 'none';
+            document.getElementById('no_car_note').style.display = 'block';
+            showCalcError('');
             lastCalc = null;
             return Promise.resolve(null);
         }
+        document.getElementById('no_car_note').style.display = 'none';
 
         const seq = ++calcSeq;
         return fetch('/api/calc/', {
@@ -708,121 +720,162 @@
         return rows;
     }
 
+    // ---------- ІСТОРІЯ: МАРШРУТИ ТА ПОЇЗДКИ ----------
+    // «Маршрут» – лише таблиця ділянок (авто не потрібне).
+    // «Поїздка» – таблиця + автомобіль + розрахунок пального (рахує сервер).
+    // Кожне збереження створює НОВИЙ запис; маршрути, збережені на карті, окремі й не змінюються.
+    let loadedHistory = { route: {}, trip: {} };
+
+    function escHtml(v) {
+        return String(v === undefined || v === null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     function fetchCalculationsFromDB() {
+        fetchHistory('route');
+        fetchHistory('trip');
+    }
+
+    function fetchHistory(kind) {
         const formData = new FormData();
-        formData.append('action', 'fetch_routes');
+        formData.append('action', 'fetch_history');
+        formData.append('kind', kind);
 
         fetch('/api/map/', { method: 'POST', body: formData })
             .then(res => res.json())
             .then(res => {
-                const container = document.getElementById('calcArchiveList');
+                const container = document.getElementById(kind === 'trip' ? 'tripHistoryList' : 'routeHistoryList');
                 if (!container) return;
                 container.innerHTML = '';
-                loadedCalculations = {};
+                loadedHistory[kind] = {};
 
-                if (res.success && res.data && res.data.length > 0) {
-                    res.data.forEach(item => {
-                        loadedCalculations[item.id] = item;
-
-                        const li = document.createElement('li');
-                        li.className = 'calc-archive-item';
-                        const dateStr = item.created_at ? new Date(item.created_at).toLocaleString('uk-UA') : '';
-
-                        li.innerHTML = `
-                            <div>
-                                <strong>📍 ${cleanEmoji(item.route)}</strong>
-                                <br><small style="color:#bdc3c7;">🕒 ${dateStr} | Відст: ${item.distance} км | Витрата: <b style="color:#2ecc71;">${item.fuel_consumed || 0} л</b></small>
-                            </div>
-                            <div style="display:flex; gap:4px;">
-                                <button class="btn btn-blue" style="padding:4px 8px; font-size:10px; margin:0;" onclick="restoreCalculationToForm(${item.id})">📂 Відновити</button>
-                                <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteCalculationFromDB(${item.id})">🗑️</button>
-                            </div>
-                        `;
-                        container.appendChild(li);
-                    });
-                } else {
-                    container.innerHTML = `<li style="color: #aaa; font-size: 11px;">Немає збережених розрахунків у базі даних.</li>`;
+                if (!res.success || !res.data || res.data.length === 0) {
+                    container.innerHTML = `<li style="color: #aaa; font-size: 11px;">${kind === 'trip' ? 'Немає збережених поїздок.' : 'Немає збережених маршрутів.'}</li>`;
+                    return;
                 }
+
+                res.data.forEach(item => {
+                    loadedHistory[kind][item.id] = item;
+                    const meta = item.meta || {};
+                    const dateStr = item.created_at ? new Date(item.created_at).toLocaleString('uk-UA') : '';
+                    let rowsCount = 0;
+                    try { rowsCount = JSON.parse(item.details || '[]').length; } catch (e) {}
+
+                    const carLine = (kind === 'trip' && meta.car_name)
+                        ? `<br><small style="color:#bdc3c7;">🚗 ${escHtml(meta.car_name)}${meta.car_plate && meta.car_plate !== 'Б/Н' ? ' (' + escHtml(meta.car_plate) + ')' : ''}</small>` : '';
+                    const fuelLine = (kind === 'trip')
+                        ? ` | Витрата: <b style="color:#2ecc71;">${(Number(item.fuel_consumed) || 0).toFixed(2)} л</b>` : '';
+
+                    const li = document.createElement('li');
+                    li.className = 'calc-archive-item';
+                    li.innerHTML = `
+                        <div>
+                            <strong>${kind === 'trip' ? '🚗' : '📍'} ${escHtml(cleanEmoji(item.route))}</strong>${carLine}
+                            <br><small style="color:#bdc3c7;">🕒 ${dateStr} | Відст: ${item.distance} км | Ділянок: ${rowsCount}${fuelLine}</small>
+                        </div>
+                        <div style="display:flex; gap:4px;">
+                            <button class="btn btn-blue" style="padding:4px 8px; font-size:10px; margin:0;" onclick="restoreHistory('${kind}', ${item.id})">📂 Відновити</button>
+                            <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteHistory(${item.id})">🗑️</button>
+                        </div>
+                    `;
+                    container.appendChild(li);
+                });
             })
-            .catch(err => console.error("Помилка завантаження архіву:", err));
+            .catch(err => console.error("Помилка завантаження історії:", err));
     }
 
-    function saveCalculationRecord() {
+    function saveHistory(kind) {
         const rows = getCurrentRowsData();
-        const totalQ = parseFloat(document.getElementById('r_q').innerText) || 0;
-
-        if (rows.length === 0 && totalQ <= 0) {
-            alert("Спочатку додайте ділянки та виконайте розрахунок пального!");
+        if (rows.length === 0) {
+            alert("Спочатку додайте ділянки маршруту!");
+            return;
+        }
+        const payload = getCalcPayload();
+        if (kind === 'trip' && !payload.car_id) {
+            alert("Для збереження поїздки оберіть автомобіль. Без авто можна зберегти лише маршрут.");
             return;
         }
 
-        let defaultName = rows.length > 0 ? rows[0].route : 'Маршрут руху';
-        if (rows.length > 1) {
-            defaultName += ` та ще ${rows.length - 1} діл.`;
-        }
+        let defaultName = rows[0].route || 'Маршрут';
+        if (rows.length > 1) defaultName += ` та ще ${rows.length - 1} діл.`;
 
-        let customName = prompt("Введіть назву розрахунку:", defaultName);
-        if (customName === null) return;
-
-        customName = cleanEmoji(customName.trim()) || defaultName;
-
-        let totalDist = 0;
-        rows.forEach(r => totalDist += r.dist);
+        let name = prompt(kind === 'trip' ? "Назва поїздки:" : "Назва маршруту:", defaultName);
+        if (name === null) return;
+        name = cleanEmoji(name.trim()) || defaultName;
 
         const formData = new FormData();
-        formData.append('action', 'save_route');
-        formData.append('name', customName);
-        formData.append('total_dist', totalDist);
-        formData.append('cities_json', JSON.stringify(rows));
-        const payload = getCalcPayload();
-        if (payload.car_id) formData.append('car_id', payload.car_id);
+        formData.append('action', 'save_history');
+        formData.append('kind', kind);
+        formData.append('name', name);
+        formData.append('rows', JSON.stringify(rows));
         formData.append('trailer', payload.trailer);
+        if (kind === 'trip') formData.append('car_id', payload.car_id);
 
         fetch('/api/map/', { method: 'POST', body: formData })
             .then(res => res.json())
             .then(res => {
                 if (res.success) {
-                    alert("Розрахунок успішно збережено!");
-                    fetchCalculationsFromDB();
+                    alert(kind === 'trip' ? "Поїздку збережено!" : "Маршрут збережено!");
+                    fetchHistory(kind);
                 } else {
-                    alert("Помилка збереження.");
+                    alert(res.message || "Помилка збереження.");
                 }
             })
             .catch(err => alert("Помилка серверного запиту"));
     }
 
-    function restoreCalculationToForm(id) {
-        const rec = loadedCalculations[id];
-        if (!rec) return;
-
-        if (confirm(`Відновити розрахунок "${rec.route}" у калькулятор?`)) {
-            document.getElementById('city_rows').innerHTML = '';
-            try {
-                const details = JSON.parse(rec.details || '[]');
-                if (Array.isArray(details)) {
-                    details.forEach(r => {
-                        appendRow(r.route, r.dist, r.cargo, r.weight, r.indK, r.isHighway);
-                    });
-                }
-            } catch (e) {
-                appendRow(rec.route, rec.distance, '-', 0, 0, false);
-            }
-            calculate();
+    function setTrailerMass(mass) {
+        mass = parseFloat(mass) || 0;
+        if (mass > 0) {
+            document.getElementById('g_trailler').value = mass;
+            if (!trailerActive) toggleTrailer();
+        } else if (trailerActive) {
+            toggleTrailer();
         }
     }
 
-    function deleteCalculationFromDB(id) {
-        if (confirm("Видалити цей розрахунок?")) {
-            const formData = new FormData();
-            formData.append('action', 'delete_route');
-            formData.append('route_id', id);
-
-            fetch('/api/map/', { method: 'POST', body: formData })
-                .then(res => res.json())
-                .then(res => {
-                    if (res.success) fetchCalculationsFromDB();
-                });
+    function selectCarByDbId(dbId) {
+        const cars = JSON.parse(localStorage.getItem(CARS_STORAGE_KEY)) || {};
+        const key = Object.keys(cars).find(k => cars[k] && String(cars[k].db_id) === String(dbId));
+        if (!key) {
+            showCalcError('Автомобіля з цієї поїздки немає в автопарку. Оберіть автомобіль вручну.');
+            return;
         }
+        localStorage.setItem(SELECTED_CAR_ID_KEY, key);
+        localStorage.setItem(SELECTED_CAR_KEY, JSON.stringify(cars[key]));
+        let recent = JSON.parse(localStorage.getItem(RECENT_CARS_KEY)) || [];
+        recent = [key].concat(recent.filter(id => id !== key)).slice(0, 5);
+        localStorage.setItem(RECENT_CARS_KEY, JSON.stringify(recent));
+        updateCarList();
+    }
+
+    function restoreHistory(kind, id) {
+        const rec = loadedHistory[kind] && loadedHistory[kind][id];
+        if (!rec) return;
+        if (!confirm(`Відновити "${rec.route}" у калькулятор? Поточна таблиця буде замінена.`)) return;
+
+        let rows = [];
+        try { rows = JSON.parse(rec.details || '[]'); } catch (e) {}
+        if (!Array.isArray(rows)) rows = [];
+
+        document.getElementById('city_rows').innerHTML = '';
+        rows.forEach(r => appendRow(r.route, r.dist, r.cargo, r.weight, r.indK, r.isHighway));
+
+        const meta = rec.meta || {};
+        setTrailerMass(meta.trailer);
+        if (kind === 'trip' && meta.car_id) selectCarByDbId(meta.car_id);
+        calculate();
+    }
+
+    function deleteHistory(id) {
+        if (!confirm("Видалити цей запис?")) return;
+        const formData = new FormData();
+        formData.append('action', 'delete_route');
+        formData.append('route_id', id);
+
+        fetch('/api/map/', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(res => { if (res.success) fetchCalculationsFromDB(); });
     }
 
     async function saveForReport() {
