@@ -89,7 +89,7 @@ td[contenteditable="true"]{ outline:none; }
 <div class="container">
     <div class="top-bar">
         <div>
-            <a href="calc.html" class="btn btn-home">🏠 На головну</a>
+            <a href="{% url 'index' %}" class="btn btn-home">🏠 На головну</a>
             <button class="btn btn-green" onclick="addFromDL()">➕ Додати з Дорожнього листа</button>
             <button class="btn btn-blue" onclick="window.print()">🖨️ Друк (A4)</button>
         </div>
