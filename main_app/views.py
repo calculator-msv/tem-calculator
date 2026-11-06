@@ -3,6 +3,7 @@ import math
 import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
+from django.db.models.functions import Length
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
@@ -380,40 +381,125 @@ def cars_api(request):
     return JsonResponse({'success': False, 'message': 'Невалідний запит'})
 
 
-# --- API ДЛЯ МАРШРУТІВ З КАРТИ ТА ЗБЕРЕЖЕННЯ РОЗРАХУНКІВ (map.html) ---
+# --- API ДЛЯ МАРШРУТІВ З КАРТИ ТА ІСТОРІЇ КАЛЬКУЛЯТОРА (map.html, calc.html) ---
+# Один і той самий розділ бази, але ТРИ незалежні списки (поле kind):
+#   map   – маршрути, збережені на карті (із зображенням і ділянками);
+#   route – маршрути (лише таблиця ділянок), збережені в калькуляторі без авто;
+#   trip  – поїздки: таблиця + автомобіль + розрахунок пального.
+# Кожне збереження створює НОВИЙ запис, тому редагування в калькуляторі
+# ніколи не змінює маршрути, збережені на карті.
+MAX_IMAGE_CHARS = 3_000_000   # ~2,2 МБ зображення у Base64
+
+LIST_FIELDS = ('id', 'route', 'distance', 'cargo', 'fuel_consumed', 'details',
+               'segments_json', 'meta', 'kind', 'car_id', 'created_at')
+
+
+def _json_loads(text, default):
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return default
+
+
+def _effective_kind(item):
+    """Тип запису; для старих записів (kind порожній) визначається за вмістом."""
+    if item['kind']:
+        return item['kind']
+    details = _json_loads(item['details'], {})
+    if isinstance(details, list):
+        return 'trip' if (item['car_id'] or (item['fuel_consumed'] or 0) > 0) else 'route'
+    return 'map'
+
+
+def _list_records(user, kind):
+    qs = (Calculation.objects.filter(user=user).order_by('-id')
+          .annotate(img_len=Length('image_data'))
+          .values(*LIST_FIELDS, 'img_len'))
+    out = []
+    for item in qs:
+        if _effective_kind(item) != kind:
+            continue
+        item['kind'] = kind
+        item['has_image'] = bool(item.pop('img_len'))
+        out.append(item)
+    return out
+
+
 @csrf_exempt
 @login_required
 def map_api(request):
     if request.method == 'POST':
         action = request.POST.get('action')
 
+        # ---------- маршрути з карти ----------
         if action == 'fetch_routes':
-            routes = list(Calculation.objects.filter(user=request.user).order_by('-id').values())
-            return JsonResponse({'success': True, 'data': routes})
+            return JsonResponse({'success': True, 'data': _list_records(request.user, 'map')})
+
+        elif action == 'fetch_route_image':
+            rec = Calculation.objects.filter(id=request.POST.get('route_id'), user=request.user).first()
+            if not rec or not rec.image_data:
+                return JsonResponse({'success': False, 'message': 'Зображення відсутнє'})
+            return JsonResponse({'success': True, 'image_data': rec.image_data})
 
         elif action == 'save_route':
-            details = request.POST.get('cities_json', '{}')
-            car, fuel, max_weight = None, 0.0, 0.0
-            try:
-                rows = json.loads(details)
-            except ValueError:
-                rows = None
-            # витрату пального рахує сервер, а не береться з браузера
-            if request.POST.get('car_id') and isinstance(rows, list):
-                car, result = run_calculation(request.user, request.POST.get('car_id'), rows, request.POST.get('trailer', 0))
-                if result:
-                    fuel, max_weight = result['total_q'], result['max_weight']
+            image = request.POST.get('image_data', '')
+            if len(image) > MAX_IMAGE_CHARS:
+                return JsonResponse({'success': False, 'message': 'Зображення завелике'})
             route = Calculation.objects.create(
                 user=request.user,
-                car=car,
-                route=request.POST.get('name', 'Новий маршрут'),
+                kind='map',
+                route=request.POST.get('name', 'Новий маршрут')[:255],
                 distance=_num(str(request.POST.get('total_dist', '0')).replace(' км', '').strip()),
-                cargo=max_weight,
-                fuel_consumed=round(fuel, 2),
-                details=details
+                details=request.POST.get('cities_json', '{}'),
+                segments_json=request.POST.get('segments_json', '[]'),
+                image_data=image if image.startswith('data:image/') else '',
             )
             return JsonResponse({'success': True, 'id': route.id})
 
+        # ---------- історія калькулятора: маршрути та поїздки ----------
+        elif action == 'fetch_history':
+            kind = request.POST.get('kind')
+            if kind not in ('route', 'trip'):
+                return JsonResponse({'success': False, 'message': 'Невідомий тип історії'})
+            data = _list_records(request.user, kind)
+            for item in data:
+                item['meta'] = _json_loads(item['meta'], {})
+            return JsonResponse({'success': True, 'data': data})
+
+        elif action == 'save_history':
+            kind = request.POST.get('kind')
+            if kind not in ('route', 'trip'):
+                return JsonResponse({'success': False, 'message': 'Невідомий тип запису'})
+            rows = _json_loads(request.POST.get('rows', '[]'), None)
+            if not isinstance(rows, list) or not rows:
+                return JsonResponse({'success': False, 'message': 'Додайте хоча б одну ділянку маршруту'})
+            rows = rows[:MAX_ROWS]
+            name = (request.POST.get('name') or 'Маршрут').strip()[:255]
+            trailer = max(_num(request.POST.get('trailer', 0)), 0.0)
+            total_dist = sum(max(_num(r.get('dist')), 0.0) for r in rows if isinstance(r, dict))
+
+            car, fuel, max_weight, meta = None, 0.0, 0.0, {'trailer': trailer}
+            if kind == 'trip':
+                car, result = run_calculation(request.user, request.POST.get('car_id'), rows, trailer)
+                if car is None:
+                    return JsonResponse({'success': False, 'message': 'Для збереження поїздки оберіть автомобіль'})
+                fuel, max_weight = result['total_q'], result['max_weight']
+                meta.update({
+                    'car_id': car.id, 'car_name': car.name, 'car_plate': car.plate,
+                    'total_q': result['total_q'], 'oils': result['oils'],
+                    'sys_k': result['sys_k'], 'k_on_work': K_APPLIES_TO_TRANSPORT_WORK,
+                })
+            else:
+                max_weight = max((max(_num(r.get('weight')), 0.0) for r in rows if isinstance(r, dict)), default=0.0)
+
+            rec = Calculation.objects.create(
+                user=request.user, kind=kind, car=car, route=name,
+                distance=round(total_dist, 3), cargo=max_weight, fuel_consumed=round(fuel, 2),
+                details=json.dumps(rows, ensure_ascii=False), meta=json.dumps(meta, ensure_ascii=False),
+            )
+            return JsonResponse({'success': True, 'id': rec.id})
+
+        # ---------- видалення (для будь-якого типу) ----------
         elif action == 'delete_route':
             route_id = request.POST.get('route_id')
             Calculation.objects.filter(id=route_id, user=request.user).delete()
