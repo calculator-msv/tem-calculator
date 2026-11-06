@@ -775,7 +775,7 @@
                         </div>
                         <div style="display:flex; gap:4px;">
                             <button class="btn btn-blue" style="padding:4px 8px; font-size:10px; margin:0;" onclick="restoreHistory('${kind}', ${item.id})">📂 Відновити</button>
-                            <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteHistory(${item.id})">🗑️</button>
+                            <button class="btn" style="padding:4px 8px; font-size:10px; margin:0; background:#e74c3c; color:white;" onclick="deleteHistory('${kind}', ${item.id})">🗑️</button>
                         </div>
                     `;
                     container.appendChild(li);
@@ -867,10 +867,11 @@
         calculate();
     }
 
-    function deleteHistory(id) {
+    function deleteHistory(kind, id) {
         if (!confirm("Видалити цей запис?")) return;
         const formData = new FormData();
         formData.append('action', 'delete_route');
+        formData.append('kind', kind);
         formData.append('route_id', id);
 
         fetch('/api/map/', { method: 'POST', body: formData })
