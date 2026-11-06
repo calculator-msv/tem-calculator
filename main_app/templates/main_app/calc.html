@@ -659,7 +659,10 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
             body: JSON.stringify(getCalcPayload())
         })
-            .then(res => res.json())
+            .then(r => r.json().catch(() => ({
+                success: false,
+                message: 'Сервер повернув помилку ' + r.status + (r.status === 404 ? ' (у urls.py немає маршруту api/calc/)' : (r.status === 403 ? ' (відхилено CSRF-захистом)' : (r.status >= 500 ? ' (помилка у views.py, дивіться Logs на Render)' : '')))
+            })))
             .then(res => {
                 if (seq !== calcSeq) return null; // прийшла застаріла відповідь
                 if (!res.success) {
