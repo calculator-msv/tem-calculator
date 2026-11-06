@@ -23,4 +23,5 @@ urlpatterns = [
     path('api/book/', views.book_api, name='book_api'),
     path('api/map/', views.map_api, name='map_api'),
     path('api/library/', views.library_api, name='library_api'),
+    path('api/calc/', views.calc_api, name='calc_api'),   # розрахунок витрати пального на сервері
 ]
