@@ -144,6 +144,8 @@
         <button class="btn" style="font-size:14px; height:50px; flex: 1; background:#c0392b; color:#fff;" onclick="clearRoute()">🧹 ОЧИСТИТИ МАРШРУТ</button>
     </div>
 
+    <div id="calc_error" style="display:none; margin-top:15px; padding:10px; border-radius:6px; background:rgba(231,76,60,0.25); color:#ff9b93; font-weight:bold; font-size:12px;"></div>
+
     <div id="results" class="results">
         <div class="res-row"><span>ВИТРАТА ПАЛЬНОГО (Q):</span> <span><span id="r_q">0</span> Л</span></div>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
@@ -165,6 +167,7 @@
 
 <script>
     const CURRENT_USER_ID = "{{ user.id|default:0 }}";
+    const CSRF_TOKEN = "{{ csrf_token }}";
     const CARS_STORAGE_KEY = 'cars_user_' + CURRENT_USER_ID;
     const RECENT_CARS_KEY = 'recent_car_ids_user_' + CURRENT_USER_ID;
     const SELECTED_CAR_ID_KEY = 'selected_car_id_user_' + CURRENT_USER_ID;
@@ -383,17 +386,20 @@
 
         customList.forEach(c => {
             const val = parseFloat(c.val) || 0;
+            // після збереження в БД id стає числовим, тому код (K4/K5) беремо й з назви
+            const m = String(c.title || '').match(/\(K(\d+)\)/i);
+            const code = /^k\d+$/.test(String(c.id)) ? String(c.id) : (m ? 'k' + m[1] : String(c.id));
 
-            if (c.id === 'k4') k4 = val;
-            if (c.id === 'k5') k5 = val;
+            if (code === 'k4') k4 = val;
+            if (code === 'k5') k5 = val;
 
             if (val > 0) {
                 if (c.type === 'minus') {
                     activeHTML.push(`<span style="color: #ff7675;">➖ ${c.title}: -${val}%</span>`);
-                    if (c.id !== 'k5') baseSysK -= val;
+                    if (code !== 'k5') baseSysK -= val;
                 } else {
                     activeHTML.push(`<span style="color: #2ecc71;">➕ ${c.title}: +${val}%</span>`);
-                    if (c.id !== 'k4') baseSysK += val;
+                    if (code !== 'k4') baseSysK += val;
                 }
             }
         });
@@ -609,48 +615,75 @@
         calculate();
     }
 
+    // ---------- РОЗРАХУНОК НА СЕРВЕРІ ----------
+    // Формула знаходиться лише в views.py (calculate_fuel). Тут – лише відправка даних і показ результату.
+    let calcTimer = null;
+    let calcSeq = 0;
+    let lastCalc = null;
+
     function calculate() {
         saveDraft();
+        clearTimeout(calcTimer);
+        calcTimer = setTimeout(requestCalculation, 200); // не спамимо сервер під час набору
+    }
+
+    function showCalcError(msg) {
+        const box = document.getElementById('calc_error');
+        if (!box) return;
+        box.innerText = msg || '';
+        box.style.display = msg ? 'block' : 'none';
+    }
+
+    function getCalcPayload() {
+        const car = JSON.parse(localStorage.getItem(SELECTED_CAR_KEY));
+        return {
+            car_id: car ? car.db_id : null,
+            trailer: trailerActive ? (parseFloat(document.getElementById('g_trailler').value) || 0) : 0,
+            rows: getCurrentRowsData()
+        };
+    }
+
+    function requestCalculation() {
         const carSelect = document.getElementById('carSelect');
         const car = JSON.parse(localStorage.getItem(SELECTED_CAR_KEY));
 
-        if (!carSelect.value || !car) {
+        if (!carSelect.value || !car || !car.db_id) {
             document.getElementById('results').style.display = 'none';
-            return;
+            lastCalc = null;
+            return Promise.resolve(null);
         }
 
-        const { baseSysK, k4, k5 } = displayActiveCoeffs();
-        const gTrailler = trailerActive ? parseFloat(document.getElementById('g_trailler').value) || 0 : 0;
-        let totalQ = 0;
-
-        document.querySelectorAll('#city_rows tr').forEach(row => {
-            const ins = row.querySelectorAll('input');
-            const hwyBtn = row.querySelector('.btn-hwy');
-
-            const km = parseFloat(ins[1].value) || 0;
-            const w = parseFloat(ins[3].value) || 0;
-            const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
-
-            const indK = isHighway ? 0 : (parseFloat(ins[4].value) || 0);
-            const hwyK = isHighway ? (k4 - k5) : 0;
-            const finalK = baseSysK + indK + hwyK;
-
-            const workWeight = w + gTrailler;
-
-            totalQ += (0.01 * car.hsm * km * (1 + 0.01 * finalK)) + (0.01 * (car.hsz || 0) * workWeight * km);
-        });
-
-        const omRes = (totalQ * (car.om || 0) / 100);
-        const otRes = (totalQ * (car.ot || 0) / 100);
-        const osRes = (totalQ * (car.os || 0) / 100);
-        const opRes = (totalQ * (car.op || 0) / 100);
-
-        document.getElementById('r_q').innerText = totalQ.toFixed(2);
-        document.getElementById('r_om').innerText = omRes.toFixed(2);
-        document.getElementById('r_ot').innerText = otRes.toFixed(2);
-        document.getElementById('r_os').innerText = osRes.toFixed(2);
-        document.getElementById('r_op').innerText = opRes.toFixed(2);
-        document.getElementById('results').style.display = 'block';
+        const seq = ++calcSeq;
+        return fetch('/api/calc/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+            body: JSON.stringify(getCalcPayload())
+        })
+            .then(res => res.json())
+            .then(res => {
+                if (seq !== calcSeq) return null; // прийшла застаріла відповідь
+                if (!res.success) {
+                    document.getElementById('results').style.display = 'none';
+                    showCalcError(res.message || 'Помилка розрахунку на сервері.');
+                    lastCalc = null;
+                    return null;
+                }
+                showCalcError('');
+                lastCalc = res;
+                document.getElementById('r_q').innerText = res.total_q.toFixed(2);
+                document.getElementById('r_om').innerText = res.oils.om.toFixed(2);
+                document.getElementById('r_ot').innerText = res.oils.ot.toFixed(2);
+                document.getElementById('r_os').innerText = res.oils.os.toFixed(2);
+                document.getElementById('r_op').innerText = res.oils.op.toFixed(2);
+                document.getElementById('results').style.display = 'block';
+                const sysK = document.getElementById('sys_k_val');
+                if (sysK) sysK.innerText = res.sys_k.toFixed(1) + '%';
+                return res;
+            })
+            .catch(err => {
+                if (seq === calcSeq) showCalcError('Немає зв’язку із сервером. Розрахунок не виконано.');
+                return null;
+            });
     }
 
     function getCurrentRowsData() {
@@ -738,6 +771,9 @@
         formData.append('name', customName);
         formData.append('total_dist', totalDist);
         formData.append('cities_json', JSON.stringify(rows));
+        const payload = getCalcPayload();
+        if (payload.car_id) formData.append('car_id', payload.car_id);
+        formData.append('trailer', payload.trailer);
 
         fetch('/api/map/', { method: 'POST', body: formData })
             .then(res => res.json())
@@ -786,77 +822,53 @@
         }
     }
 
-    function saveForReport() {
+    async function saveForReport() {
         const selectedKey = document.getElementById('carSelect').value;
         const car = JSON.parse(localStorage.getItem(SELECTED_CAR_KEY));
         if (!selectedKey || !car) { alert("Будь ласка, оберіть автомобіль!"); return; }
 
-        const { baseSysK, k4, k5 } = displayActiveCoeffs();
-        const USER_COEFFS_KEY = 'custom_coeffs_list_user_' + CURRENT_USER_ID;
-        const customList = JSON.parse(localStorage.getItem(USER_COEFFS_KEY) || localStorage.getItem('custom_coeffs_list')) || [];
-        let activeCoeffsList = [];
+        // відкриваємо вікно одразу (до очікування сервера), щоб браузер не заблокував спливаюче вікно
+        const win = window.open('', '_blank');
 
-        customList.forEach(c => {
-            const val = parseFloat(c.val) || 0;
-            if (val > 0) {
-                const prefix = c.type === 'minus' ? '-' : '+';
-                activeCoeffsList.push(`${c.title}: ${prefix}${val}%`);
-            }
-        });
-
-        let distCity = 0;
-        let distOut = 0;
-        let maxWeight = 0;
-        const rows = [];
-
-        document.querySelectorAll('#city_rows tr').forEach(row => {
-            const ins = row.querySelectorAll('input');
-            const hwyBtn = row.querySelector('.btn-hwy');
-
-            const route = cleanEmoji(ins[0].value);
-            const dist = parseFloat(ins[1].value) || 0;
-            const cargo = ins[2].value;
-            const weight = parseFloat(ins[3].value) || 0;
-            const isHighway = hwyBtn ? hwyBtn.classList.contains('active') : false;
-            const indK = isHighway ? 0 : (parseFloat(ins[4].value) || 0);
-
-            if (isHighway) {
-                distOut += dist;
-            } else {
-                distCity += dist;
-            }
-
-            maxWeight = Math.max(maxWeight, weight);
-            const rowSysK = isHighway ? (baseSysK + k4 - k5) : baseSysK;
-
-            rows.push({ route, dist, cargo, weight, indK, isHighway, rowSysK });
-        });
-
-        const totalQ = parseFloat(document.getElementById('r_q').innerText) || 0;
+        clearTimeout(calcTimer);
+        const res = await requestCalculation();
+        if (!res) {
+            if (win) win.close();
+            alert("Не вдалося виконати розрахунок на сервері. Перевірте з’єднання та вибір автомобіля.");
+            return;
+        }
 
         const reportData = {
-            carName: car.name,
-            car: car.name,
-            plate: car.plate || "Б/Н",
-            hsm: car.hsm,
-            hsz: car.hsz || 0,
-            om: car.om || 0,
-            ot: car.ot || 0,
-            os: car.os || 0,
-            op: car.op || 0,
-            sysK: baseSysK,
-            k4: k4,
-            k5: k5,
-            activeCoeffsList: activeCoeffsList,
-            distCity: distCity,
-            distOut: distOut,
-            weight: maxWeight,
-            totalFuel: totalQ,
-            rows: rows
+            carId: res.car.id,
+            carName: res.car.name,
+            car: res.car.name,
+            plate: res.car.plate || "Б/Н",
+            hsm: res.car.hs,
+            hsz: res.car.hw || 0,
+            om: res.car.om || 0,
+            ot: res.car.ot || 0,
+            os: res.car.os || 0,
+            op: res.car.op || 0,
+            sysK: res.sys_k,
+            k4: res.k4,
+            k5: res.k5,
+            activeCoeffsList: res.active_coeffs,
+            distCity: res.dist_city,
+            distOut: res.dist_out,
+            weight: res.max_weight,
+            totalFuel: res.total_q,
+            // результати сервера по кожній ділянці (q) — для звіту
+            rows: res.rows.map(r => ({
+                route: r.route, dist: r.dist, cargo: r.cargo, weight: r.weight,
+                indK: r.indK, isHighway: r.isHighway, rowSysK: r.row_sys_k, q: r.q
+            })),
+            trailer: getCalcPayload().trailer,
+            serverCalculated: true
         };
 
         localStorage.setItem('last_report_data', JSON.stringify(reportData));
-        window.open('{% url "preview" %}', '_blank');
+        const url = '{% url "preview" %}';
+        if (win) { win.location.href = url; } else { window.location.href = url; }
     }
 
     // назва маршруту та вантаж не викликають calculate(), тому зберігаємо чернетку окремо
