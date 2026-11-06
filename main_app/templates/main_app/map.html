@@ -606,6 +606,7 @@
         if (!confirm("Видалити цей маршрут з бази даних?")) return;
         const formData = new FormData();
         formData.append('action', 'delete_route');
+        formData.append('kind', 'map');
         formData.append('route_id', id);
 
         fetch('/api/map/', { method: 'POST', body: formData })
