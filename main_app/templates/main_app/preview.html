@@ -33,6 +33,7 @@ body{
 .controls button{ color:#fff; padding:8px 15px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; }
 .controls label{ cursor:pointer; user-select:none; }
 .screen-note{ font-family:Arial,sans-serif; font-size:12px; color:#fff; width:297mm; margin:0 0 6px; }
+.calc-status{ font-family:Arial,sans-serif; font-size:12px; font-weight:bold; width:297mm; margin:0 0 6px; color:#ffb4ab; display:none; }
 
 /* ---------- сторінка ---------- */
 .page{
@@ -103,7 +104,7 @@ td.l .cell{ text-align:left; }
 @media print{
     html,body{ background:#fff; }
     body{ padding:0; display:block; }
-    .controls, .screen-note{ display:none !important; }
+    .controls, .screen-note, .calc-status{ display:none !important; }
     .page{ width:297mm; min-height:0; padding:0 20mm; box-shadow:none; margin:0; }
     .calc-page{ display:none; }
     body.print-calc .calc-page{ display:block; break-before:page; }
@@ -114,13 +115,14 @@ td.l .cell{ text-align:left; }
 
 <div class="controls">
     <button onclick="window.print()" style="background:#27ae60;">🖨️ ДРУК (А4 АЛЬБОМНА)</button>
-    <button onclick="reCalc()" style="background:#3498db;">🔄 ПЕРЕРАХУВАТИ</button>
+    <button onclick="reCalcNow()" style="background:#3498db;">🔄 ПЕРЕРАХУВАТИ</button>
     <button onclick="goToBook()" style="background:#8e44ad;">📖 КНИГА ОБЛІКУ</button>
     <button onclick="window.close()" style="background:#e74c3c;">❌ ЗАКРИТИ</button>
     <label><input type="checkbox" id="chk_inline" checked onchange="toggleInline()"> Розрахунок у рядках розділу 2</label>
     <label><input type="checkbox" id="chk_calc" onchange="document.body.classList.toggle('print-calc', this.checked)"> Окрема сторінка з розрахунками</label>
 </div>
-<div class="screen-note">Друкується те, що відмічено галочками: розрахунок у рядках розділу 2 та/або окрема сторінка розрахунків. Поля «Водій» та дата залишаються порожніми для заповнення від руки. Комірки таблиці можна редагувати.</div>
+<div class="screen-note">Друкується те, що відмічено галочками: розрахунок у рядках розділу 2 та/або окрема сторінка розрахунків. Поля «Водій» та дата залишаються порожніми для заповнення від руки. Комірки таблиці можна редагувати; витрата пального перераховується на сервері.</div>
+<div class="calc-status" id="calc_status"></div>
 
 <!-- ===================== СТОРІНКА 1: РОЗДІЛ 2 ===================== -->
 <div class="page form-page">
@@ -200,7 +202,7 @@ td.l .cell{ text-align:left; }
 
     <div class="section-title">3. Покроковий розрахунок та розшифрування формули</div>
     <div class="formula-card">
-        <div class="formula-main">
+        <div class="formula-main" id="formula_main">
             Q<sub>н</sub> = 0,01 · (H<sub>san</sub> · S + H<sub>w</sub> · W) · (1 + 0,01 · K<sub>Σ</sub>)
         </div>
         <div class="formula-legend">
@@ -225,8 +227,12 @@ td.l .cell{ text-align:left; }
 </div>
 
 <script>
+const CSRF_TOKEN = "{{ csrf_token }}";
+
 let rawData = {};
 let lastTotals = {};
+let calcSeq = 0;
+let calcTimer = null;
 const BODY_ROWS = 21;          // у бланку Word — 21 рядок під заголовком і рядком нумерації
 const COL_CLASSES = ['r-route','r-dep','r-arr','r-dcargo','r-dempty','r-dsum','r-dtrailer',
                      'r-dtow','r-midle','r-mdrive','r-msum','r-cargoname','r-weight','r-notes'];
@@ -238,6 +244,13 @@ function num(el){
 }
 // «0» у бланку не друкуємо — залишаємо комірку порожньою
 function show(v){ return (v && v !== 0) ? String(v) : ''; }
+
+function esc(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+// число для формул: без зайвих нулів, до 3 знаків
+function fmt(v){ return String(Math.round((Number(v) || 0) * 1000) / 1000); }
+function f2(v){ return (Number(v) || 0).toFixed(2); }
 
 function makeCell(cls, text, editable){
     const td = document.createElement('td');
@@ -297,7 +310,7 @@ window.onload = function(){
 
     renderRows();
     document.getElementById('detailed_rows').addEventListener('input', reCalc);
-    reCalc();
+    reCalcNow();
     fitToSheet();
 };
 
@@ -324,7 +337,7 @@ function toggleInline(){
         if (!saved[i]) return;
         tr.querySelectorAll('.cell').forEach((c, j) => { c.textContent = saved[i][j]; });
     });
-    reCalc();
+    reCalcNow();
     fitToSheet();
 }
 
@@ -385,15 +398,29 @@ function renderRows(){
     }
 }
 
+/* =====================================================================
+   РОЗРАХУНОК: пробіги й вага підсумовуються тут, а ВИТРАТА ПАЛЬНОГО
+   рахується на сервері (/api/calc/, функція calculate_fuel у views.py).
+   ===================================================================== */
+function setStatus(msg){
+    const box = document.getElementById('calc_status');
+    box.innerText = msg || '';
+    box.style.display = msg ? 'block' : 'none';
+}
+
+// відкладений перерахунок під час редагування комірок
 function reCalc(){
-    const hs  = parseFloat(rawData.hsm) || 0;
-    const hsz = parseFloat(rawData.hsz) || 0;
+    clearTimeout(calcTimer);
+    calcTimer = setTimeout(reCalcNow, 300);
+}
 
-    let totCargoDist = 0, totEmptyDist = 0, totSumDist = 0, maxWeight = 0, totalQ = 0;
-    let formulasHtml = "";
-    const qArray = [];
+function reCalcNow(){
+    clearTimeout(calcTimer);
 
-    const trs = document.querySelectorAll('#detailed_rows tr.data');
+    let totCargoDist = 0, totEmptyDist = 0, totSumDist = 0, maxWeight = 0;
+    const payload = [];
+
+    const trs = [...document.querySelectorAll('#detailed_rows tr.data')];
     trs.forEach((tr, idx) => {
         const routeName = tr.querySelector('.r-route').textContent.trim() || `Ділянка ${idx + 1}`;
         const dCargo = num(tr.querySelector('.r-dcargo'));
@@ -402,99 +429,159 @@ function reCalc(){
         tr.querySelector('.r-dsum').textContent = distTotal ? distTotal.toFixed(1) : '';
 
         const weight = num(tr.querySelector('.r-weight'));
-        const sysK = parseFloat(tr.dataset.sysK) || 0;
-        const indK = parseFloat(tr.dataset.indK) || 0;
-        const sumK = sysK + indK;
-
-        const W = weight * distTotal;
-        const innerPart = (hs * distTotal) + (hsz * W);
-        const qi = 0.01 * innerPart * (1 + 0.01 * sumK);
+        const cargoName = tr.querySelector('.r-cargoname').textContent.trim();
 
         totCargoDist += dCargo;
         totEmptyDist += dEmpty;
-        totSumDist   += distTotal;
+        totSumDist += distTotal;
         if (weight > maxWeight) maxWeight = weight;
-        totalQ += qi;
-        qArray.push(qi.toFixed(2));
 
-        const safeName = routeName.replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
-        let formulaStr = `<b>${idx + 1}. ${safeName}:</b><br>`;
-        if (hsz > 0 && weight > 0){
-            formulaStr += `&nbsp;&nbsp;Q<sub>н${idx + 1}</sub> = 0,01 · (${hs} · ${distTotal} + ${hsz} · ${W}) · (1 + 0,01 · ${sumK}) = <b>${qi.toFixed(2)} л</b><br>`;
-        } else {
-            formulaStr += `&nbsp;&nbsp;Q<sub>н${idx + 1}</sub> = 0,01 · (${hs} · ${distTotal}) · (1 + 0,01 · ${sumK}) = <b>${qi.toFixed(2)} л</b><br>`;
-        }
-        formulasHtml += formulaStr;
-
-        const line = document.getElementById('calc_line_' + idx);
-        if (line){
-            line.textContent = (hsz > 0 && weight > 0)
-                ? `Qн${idx + 1} = 0,01 · (${hs} · ${distTotal} + ${hsz} · ${W}) · (1 + 0,01 · ${sumK}) = ${qi.toFixed(2)} л`
-                : `Qн${idx + 1} = 0,01 · (${hs} · ${distTotal}) · (1 + 0,01 · ${sumK}) = ${qi.toFixed(2)} л`;
-        }
+        payload.push({
+            route: routeName,
+            cargo: cargoName || '-',
+            dist: distTotal,
+            weight: weight,
+            indK: parseFloat(tr.dataset.indK) || 0,
+            isHighway: tr.dataset.isHighway === 'true'
+        });
     });
 
-    const ch = document.getElementById('calc_head');
-    if (ch) ch.textContent = 'Розрахунок витрати ПММ:  Qн = 0,01 · (Hs · S + Hw · W) · (1 + 0,01 · KΣ)';
-    const ct = document.getElementById('calc_total');
-    if (ct) ct.textContent = qArray.length
-        ? `Всього витрачено ПММ: ${qArray.map((_, i) => 'Qн' + (i + 1)).join(' + ')} = ${qArray.join(' + ')} = ${totalQ.toFixed(2)} л`
-        : '';
+    document.getElementById('tot_dist_cargo').innerText = totCargoDist.toFixed(1);
+    document.getElementById('tot_dist_empty').innerText = totEmptyDist.toFixed(1);
+    document.getElementById('tot_dist_sum').innerText = totSumDist.toFixed(1);
+    document.getElementById('tot_weight').innerText = maxWeight > 0 ? maxWeight + ' т' : '0';
 
-    document.getElementById('formulas_container').innerHTML = formulasHtml || "<i>Немає ділянок для розрахунку</i>";
+    lastTotals = { distCargo: totCargoDist, distEmpty: totEmptyDist, distSum: totSumDist, maxWeight: maxWeight };
 
-    if (qArray.length > 0){
-        const qNames  = qArray.map((_, i) => `Q<sub>н${i + 1}</sub>`).join(' + ');
-        const qValues = qArray.join(' + ');
-        document.getElementById('sum_addition_container').innerHTML =
-            `Σ Q<sub>н</sub> = ${qNames} = ${qValues} = <u>${totalQ.toFixed(2)} л</u>`;
-    } else {
-        document.getElementById('sum_addition_container').innerHTML = `Σ Q<sub>н</sub> = 0,00 л`;
+    if (!trs.length){
+        document.getElementById('formulas_container').innerHTML = "<i>Немає ділянок для розрахунку</i>";
+        document.getElementById('sum_addition_container').innerHTML = "Σ Q<sub>н</sub> = 0,00 л";
+        applyTotals(null);
+        return Promise.resolve(null);
+    }
+    if (!rawData.carId){
+        setStatus('Звіт створено зі старої версії калькулятора: відкрийте звіт знову з калькулятора, щоб витрата пального рахувалась на сервері.');
+        return Promise.resolve(null);
     }
 
-    // рядок «Всього» у бланку
-    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('tot_dist_cargo', totCargoDist ? totCargoDist.toFixed(1) : '');
-    set('tot_dist_empty', totEmptyDist ? totEmptyDist.toFixed(1) : '');
-    set('tot_dist_sum',   totSumDist   ? totSumDist.toFixed(1)   : '');
-    set('tot_weight',     maxWeight    ? String(maxWeight)       : '');
-
-    // підсумки для «Книги обліку» (ті самі формати, що й у попередній версії)
-    lastTotals = {
-        distTotal: totSumDist.toFixed(1),
-        distCargo: totCargoDist.toFixed(1),
-        distEmpty: totEmptyDist.toFixed(1),
-        weight: maxWeight > 0 ? maxWeight + ' т' : '0',
-        weightNum: maxWeight,
-        fuel: totalQ.toFixed(2)
-    };
-
-    // сторінка розрахунків
-    document.getElementById('view_total_q').innerText = totalQ.toFixed(2);
-    document.querySelectorAll('.q_copy').forEach(el => el.innerText = totalQ.toFixed(2));
-
-    document.getElementById('res_om').innerText = (totalQ * (rawData.om || 0) / 100).toFixed(2);
-    document.getElementById('res_ot').innerText = (totalQ * (rawData.ot || 0) / 100).toFixed(2);
-    document.getElementById('res_os').innerText = (totalQ * (rawData.os || 0) / 100).toFixed(2);
-    document.getElementById('res_op').innerText = (totalQ * (rawData.op || 0) / 100).toFixed(2);
+    const seq = ++calcSeq;
+    return fetch('/api/calc/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+        body: JSON.stringify({ car_id: rawData.carId, trailer: rawData.trailer || 0, rows: payload })
+    })
+        .then(res => res.json())
+        .then(res => {
+            if (seq !== calcSeq) return null;              // застаріла відповідь
+            if (!res.success){
+                setStatus(res.message || 'Помилка розрахунку на сервері.');
+                return null;
+            }
+            setStatus('');
+            renderServerResult(res);
+            return res;
+        })
+        .catch(() => {
+            if (seq === calcSeq) setStatus('Немає зв’язку із сервером: витрату пального не перераховано.');
+            return null;
+        });
 }
 
-function goToBook(){
-    reCalc();
-    const t = lastTotals;
+function applyTotals(res){
+    const totalQ = res ? res.total_q : 0;
+    const oils = res ? res.oils : { om: 0, ot: 0, os: 0, op: 0 };
+
+    document.getElementById('view_total_q').innerText = f2(totalQ);
+    document.querySelectorAll('.q_copy').forEach(el => el.innerText = f2(totalQ));
+    document.getElementById('res_om').innerText = f2(oils.om);
+    document.getElementById('res_ot').innerText = f2(oils.ot);
+    document.getElementById('res_os').innerText = f2(oils.os);
+    document.getElementById('res_op').innerText = f2(oils.op);
+
+    lastTotals.totalQ = totalQ;
+    lastTotals.oils = oils;
+}
+
+function renderServerResult(res){
+    const hs = res.car.hs, hw = res.car.hw;
+    const kOnWork = !!res.k_on_work;
+    const trailer = parseFloat(rawData.trailer) || 0;
+
+    // шапка сторінки розрахунків
+    document.getElementById('m_hsm').innerText  = fmt(hs);
+    document.getElementById('m_hszm').innerText = fmt(hw);
+    document.getElementById('m_sys_k').innerText = fmt(res.sys_k);
+
+    // формула відповідно до налаштування сервера
+    document.getElementById('formula_main').innerHTML = kOnWork
+        ? 'Q<sub>н</sub> = 0,01 · (H<sub>s</sub> · S + H<sub>w</sub> · W) · (1 + 0,01 · K<sub>Σ</sub>)'
+        : 'Q<sub>н</sub> = 0,01 · H<sub>s</sub> · S · (1 + 0,01 · K<sub>Σ</sub>) + 0,01 · H<sub>w</sub> · W';
+
+    let formulasHtml = '';
+    const lines = [];
+    res.rows.forEach((r, i) => {
+        const n = i + 1;
+        const W = (r.weight + trailer) * r.dist;
+        let body, plain;
+        if (hw > 0 && W > 0){
+            body = kOnWork
+                ? `0,01 · (${fmt(hs)} · ${fmt(r.dist)} + ${fmt(hw)} · ${fmt(W)}) · (1 + 0,01 · ${fmt(r.row_k)})`
+                : `0,01 · ${fmt(hs)} · ${fmt(r.dist)} · (1 + 0,01 · ${fmt(r.row_k)}) + 0,01 · ${fmt(hw)} · ${fmt(W)}`;
+        } else {
+            body = `0,01 · ${fmt(hs)} · ${fmt(r.dist)} · (1 + 0,01 · ${fmt(r.row_k)})`;
+        }
+        formulasHtml += `<b>${n}. ${esc(r.route)}:</b><br>&nbsp;&nbsp;Q<sub>н${n}</sub> = ${body} = <b>${f2(r.q)} л</b><br>`;
+        lines.push(`${n}. ${r.route}: Qн${n} = ${body} = ${f2(r.q)} л`);
+    });
+    document.getElementById('formulas_container').innerHTML = formulasHtml || "<i>Немає ділянок для розрахунку</i>";
+
+    const qNames = res.rows.map((_, i) => `Q<sub>н${i + 1}</sub>`).join(' + ');
+    const qValues = res.rows.map(r => f2(r.q)).join(' + ');
+    document.getElementById('sum_addition_container').innerHTML =
+        res.rows.length
+            ? `Σ Q<sub>н</sub> = ${qNames} = ${qValues} = <u>${f2(res.total_q)} л</u>`
+            : 'Σ Q<sub>н</sub> = 0,00 л';
+
+    applyTotals(res);
+
+    // розрахунок прямо в рядках розділу 2 (якщо ввімкнено)
+    const head = document.getElementById('calc_head');
+    if (head){
+        head.textContent = `Розрахунок витрати пального: Hs = ${fmt(hs)} л/100 км; Hw = ${fmt(hw)} л/100 т·км; K системний = ${fmt(res.sys_k)} %`;
+        lines.forEach((t, i) => {
+            const el = document.getElementById('calc_line_' + i);
+            if (el) el.textContent = t;
+        });
+        const total = document.getElementById('calc_total');
+        if (total){
+            total.textContent = `Разом: Qн = ${res.rows.map(r => f2(r.q)).join(' + ')} = ${f2(res.total_q)} л`;
+        }
+        fitToSheet();
+    }
+}
+
+async function goToBook(){
+    await reCalcNow();
+
+    const q = lastTotals.totalQ || 0;
+    const oils = lastTotals.oils || { om: 0, ot: 0 };
+    const distSum = lastTotals.distSum || 0;
+    const maxW = lastTotals.maxWeight || 0;
+
+    const oilText = `M:${f2(oils.om)}л, T:${f2(oils.ot)}л`;
     const waybillData = {
         date: new Date().toLocaleDateString('uk-UA'),
         docNum: 'ДЛ-' + Math.floor(1000 + Math.random() * 9000),
-        distTotal: t.distTotal || '0',
-        distCargo: t.distCargo || '0',
-        distEmpty: t.distEmpty || '0',
+        distTotal: (lastTotals.distSum || 0).toFixed(1),
+        distCargo: (lastTotals.distCargo || 0).toFixed(1),
+        distEmpty: (lastTotals.distEmpty || 0).toFixed(1),
         cargoName: rawData.rows && rawData.rows.length > 0 ? rawData.rows[0].cargo : 'Вантаж',
-        weight: t.weight || '0',
-        tkm: ((t.weightNum || 0) * (parseFloat(t.distTotal) || 0)).toFixed(1),
-        fuelNorm: t.fuel || '0',
-        fuelFact: t.fuel || '0',
-        oilFactDetails: `M:${document.getElementById('res_om')?.innerText || 0}л, T:${document.getElementById('res_ot')?.innerText || 0}л`,
-        oilNormDetails: `M:${document.getElementById('res_om')?.innerText || 0}л, T:${document.getElementById('res_ot')?.innerText || 0}л`
+        weight: maxW > 0 ? maxW + ' т' : '0',
+        tkm: (maxW * distSum).toFixed(1),
+        fuelNorm: f2(q),
+        fuelFact: f2(q),
+        oilFactDetails: oilText,
+        oilNormDetails: oilText
     };
 
     localStorage.setItem('last_waybill_data', JSON.stringify(waybillData));
