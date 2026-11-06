@@ -24,6 +24,7 @@
         .btn-save { background: #3498db; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; }
         .city-item { display: flex; justify-content: space-between; padding: 8px; margin-bottom: 5px; border-left: 6px solid #ccc; background: #f1f3f4; font-size: 12px; font-weight: bold; border-radius: 0 4px 4px 0; }
 
+        /* КОМПАКТНІ КАРТКИ МАРШРУТІВ */
         .route-card {
             background: #f8f9fa;
             border: 1px solid #ddd;
@@ -282,7 +283,7 @@
                             <small style="color: #7f8c8d; font-size: 11px;">📌 ${r.distance || r.total_dist} км (${dateStr})</small>
 
                             <div class="route-actions">
-                                <button class="btn-card-action btn-card-img" onclick="openImageModal(${i})">🖼️ Маршрут</button>
+                                <button class="btn-card-action btn-card-img" ${r.has_image ? '' : 'disabled style="opacity:.45; cursor:not-allowed;"'} onclick="openImageModal(${i})">🖼️ Маршрут</button>
                                 <button class="btn-card-action btn-card-details" onclick="toggleDetails(${i})">📊 Деталі</button>
                             </div>
 
@@ -310,36 +311,59 @@
         selectRoute(index);
     }
 
-    function openImageModal(index) {
+    async function openImageModal(index) {
         const route = dbRoutesList[index];
-        if (!route || !route.image_data) {
-            alert("Зображення карти відсутнє!");
+        if (!route) return;
+        if (!route.has_image) {
+            alert("Для цього маршруту зображення не збережено (маршрут створено до оновлення).");
             return;
         }
 
+        // вікно відкриваємо одразу, щоб його не заблокував браузер
         const win = window.open("", "_blank");
+        if (!win) { alert("Дозвольте спливаючі вікна для цього сайту."); return; }
+        win.document.write('<p style="font-family:Segoe UI,sans-serif;padding:20px;">Завантаження зображення...</p>');
+
+        try {
+            if (!route.image_data) {
+                const fd = new FormData();
+                fd.append('action', 'fetch_route_image');
+                fd.append('route_id', route.id);
+                const res = await fetch('/api/map/', { method: 'POST', body: fd }).then(r => r.json());
+                if (!res.success) { win.close(); alert(res.message || "Не вдалося отримати зображення"); return; }
+                route.image_data = res.image_data;
+            }
+        } catch (e) {
+            win.close();
+            alert("Помилка завантаження зображення");
+            return;
+        }
+
+        const title = cleanEmoji(route.route || route.name);
+        win.document.open();
         win.document.write(`
             <html>
             <head>
-                <title>Карта маршруту - ${cleanEmoji(route.route || route.name)}</title>
+                <title>Карта маршруту - ${title}</title>
                 <style>
                     body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #2c3e50; text-align: center; color: white; }
                     img { max-width: 95%; border-radius: 8px; border: 2px solid #fff; box-shadow: 0 5px 25px rgba(0,0,0,0.5); }
                     .top-btn-bar { margin-bottom: 20px; display: flex; justify-content: center; gap: 10px; }
                     .btn-print { background: #27ae60; color: white; border: none; padding: 12px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px; }
                     .btn-save { background: #2980b9; color: white; border: none; padding: 12px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; }
+                    @media print { .top-btn-bar { display: none; } body { background: #fff; padding: 0; } img { max-width: 100%; border: none; box-shadow: none; } }
                 </style>
             </head>
             <body>
                 <div class="top-btn-bar">
                     <button class="btn-print" onclick="window.print()">🖨️ ДРУКУВАТИ ЗОБРАЖЕННЯ</button>
-                    <a class="btn-save" href="${route.image_data}" download="Route_${cleanEmoji(route.route || route.name)}.jpg">💾 ЗБЕРЕГТИ ФАЙЛ</a>
+                    <a class="btn-save" href="${route.image_data}" download="Route_${title}.jpg">💾 ЗБЕРЕГТИ ФАЙЛ</a>
                 </div>
-                <h2>📍 Маршрут: ${cleanEmoji(route.route || route.name)} (${route.distance || route.total_dist} км)</h2>
                 <img src="${route.image_data}" alt="Карта">
             </body>
             </html>
         `);
+        win.document.close();
     }
 
     function toggleDetails(index) {
@@ -401,22 +425,165 @@
         panel.style.display = 'block';
     }
 
+    // ---------- ЗОБРАЖЕННЯ МАРШРУТУ (карта + назва + параметри) ----------
+    function drawRouteFallback(w, h) {
+        // запасний варіант, якщо знімок карти (html2canvas) не вдався: малюємо маршрут самостійно
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#e8eef2';
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = '#d5dde3';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < w; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+        for (let y = 0; y < h; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+        routeLayer.eachLayer(layer => {
+            if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+                const pts = layer.getLatLngs().map(ll => map.latLngToContainerPoint(ll));
+                ctx.strokeStyle = (layer.options && layer.options.color) || '#1a73e8';
+                ctx.lineWidth = 7;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+                ctx.stroke();
+            }
+        });
+        waypoints.forEach((wp, i) => {
+            const p = map.latLngToContainerPoint([wp[1], wp[0]]);
+            ctx.fillStyle = '#c0392b';
+            ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(String(i + 1), p.x, p.y);
+        });
+        ctx.fillStyle = '#7f8c8d';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        ctx.fillText('Схема маршруту (підкладка карти недоступна)', 10, h - 10);
+        return c;
+    }
+
+    async function captureMapCanvas() {
+        // показуємо весь маршрут і чекаємо, поки завантажаться плитки
+        try { map.fitBounds(routeLayer.getBounds(), { padding: [40, 40], animate: false }); } catch (e) {}
+        await delay(1000);
+        const mapEl = document.getElementById('map');
+        try {
+            return await html2canvas(mapEl, { useCORS: true, allowTaint: false, backgroundColor: '#e8eef2', logging: false });
+        } catch (e) {
+            console.warn('html2canvas не спрацював, малюємо схему маршруту:', e);
+            return drawRouteFallback(mapEl.clientWidth, mapEl.clientHeight);
+        }
+    }
+
+    function fitText(ctx, text, maxWidth) {
+        if (ctx.measureText(text).width <= maxWidth) return text;
+        while (text.length > 1 && ctx.measureText(text + '…').width > maxWidth) text = text.slice(0, -1);
+        return text + '…';
+    }
+
+    async function buildRouteImage(name) {
+        const base = await captureMapCanvas();
+
+        // ділянки для легенди (однакові місця додаємо разом)
+        const raw = routeSegments.length > 0
+            ? routeSegments.map(sg => ({ loc: sg.loc, dist: parseFloat(sg.dist) || 0 }))
+            : Object.keys(currentCityData).map(k => ({ loc: k, dist: parseFloat(currentCityData[k]) || 0 }));
+        const sum = {};
+        raw.forEach(sg => { const loc = cleanEmoji(sg.loc); sum[loc] = (sum[loc] || 0) + sg.dist; });
+        const legend = Object.keys(sum).filter(k => sum[k] >= 0.1).map(k => ({
+            label: k === 'Траса' ? 'Заміська траса' : 'м. ' + k,
+            km: sum[k],
+            color: cityColorMap[k] || '#7f8c8d'
+        }));
+
+        const W = Math.min(base.width, 1400);
+        const scale = W / base.width;
+        const mapH = Math.round(base.height * scale);
+        const headerH = 92, rowH = 30, cols = 2;
+        const legendRows = Math.ceil(legend.length / cols);
+        const footerH = 56 + legendRows * rowH;
+
+        const out = document.createElement('canvas');
+        out.width = W;
+        out.height = headerH + mapH + footerH;
+        const ctx = out.getContext('2d');
+        const font = "'Segoe UI', Arial, sans-serif";
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, out.width, out.height);
+
+        // шапка: назва та загальні параметри
+        ctx.fillStyle = '#1a73e8';
+        ctx.fillRect(0, 0, W, headerH);
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        ctx.font = `bold 28px ${font}`;
+        ctx.fillText(fitText(ctx, name, W - 40), 20, 38);
+        ctx.font = `18px ${font}`;
+        const total = document.getElementById('total-val').innerText;
+        ctx.fillText(`Загальний пробіг: ${total}   |   Точок маршруту: ${waypoints.length}   |   ${new Date().toLocaleString('uk-UA')}`, 20, 72);
+
+        // карта
+        ctx.drawImage(base, 0, headerH, W, mapH);
+
+        // підвал: розбивка по ділянках
+        const fy = headerH + mapH;
+        ctx.fillStyle = '#f4f6f8';
+        ctx.fillRect(0, fy, W, footerH);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = `bold 18px ${font}`;
+        ctx.fillText('Розбивка по ділянках:', 20, fy + 30);
+        ctx.font = `16px ${font}`;
+        const colW = (W - 40) / cols;
+        legend.forEach((it, i) => {
+            const cx = 20 + (i % cols) * colW;
+            const cy = fy + 48 + Math.floor(i / cols) * rowH;
+            ctx.fillStyle = it.color;
+            ctx.fillRect(cx, cy, 16, 16);
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'left';
+            ctx.fillText(fitText(ctx, it.label, colW - 120), cx + 24, cy + 14);
+            ctx.textAlign = 'right';
+            ctx.fillText(it.km.toFixed(1) + ' км', cx + colW - 24, cy + 14);
+        });
+        ctx.textAlign = 'left';
+
+        // стискаємо, щоб запис не був завеликим для сервера
+        let q = 0.85, data = out.toDataURL('image/jpeg', q);
+        while (data.length > 2400000 && q > 0.4) { q -= 0.1; data = out.toDataURL('image/jpeg', q); }
+        return data;
+    }
+
     async function saveCurrentRoute() {
-        if (Object.keys(currentCityData).length === 0) return alert("Побудуйте маршрут!");
+        if (waypoints.length < 2 || Object.keys(currentCityData).length === 0) {
+            return alert("Побудуйте маршрут на карті (мінімум 2 точки)!");
+        }
         let name = prompt("Введіть назву маршруту (напр. Хмельницький-Красилів):");
         if (!name) return;
         name = cleanEmoji(name);
 
-        document.getElementById('status').innerText = "📸 Зберігаємо маршрут у базу даних...";
+        const status = document.getElementById('status');
+        status.innerText = "📸 Створюємо зображення маршруту...";
 
-        const mapEl = document.getElementById('map');
-        const canvas = await html2canvas(mapEl, { useCORS: true });
-        const imgData = canvas.toDataURL("image/jpeg", 0.7);
+        let imgData = '';
+        try {
+            imgData = await buildRouteImage(name);
+        } catch (e) {
+            console.error(e);
+            if (!confirm("Не вдалося створити зображення маршруту. Зберегти маршрут без зображення?")) {
+                status.innerText = "";
+                return;
+            }
+        }
 
+        status.innerText = "💾 Зберігаємо маршрут у базу даних...";
         const formData = new FormData();
         formData.append('action', 'save_route');
         formData.append('name', name);
-        formData.append('total_dist', document.getElementById('total-val').innerText.replace(' км', ''));
+        formData.append('total_dist', document.getElementById('total-val').innerText);
         formData.append('cities_json', JSON.stringify(currentCityData));
         formData.append('segments_json', JSON.stringify(routeSegments));
         formData.append('image_data', imgData);
@@ -426,9 +593,10 @@
             .then(res => {
                 if (res.success) {
                     loadSavedRoutesFromDB();
-                    document.getElementById('status').innerText = "✅ Маршрут успішно збережено у БД";
+                    status.innerText = imgData ? "✅ Маршрут із зображенням збережено у БД" : "✅ Маршрут збережено (без зображення)";
                 } else {
-                    alert("Помилка збереження у базу!");
+                    alert(res.message || "Помилка збереження у базу!");
+                    status.innerText = "";
                 }
             })
             .catch(err => alert("Помилка зв'язку з сервером"));
@@ -449,37 +617,21 @@
 
     function selectRoute(i) {
         if (!dbRoutesList[i]) return;
-        const selectedRoute = dbRoutesList[i];
-        
         try {
-            currentCityData = JSON.parse(selectedRoute.cities_json || selectedRoute.details || '{}');
-            routeSegments = JSON.parse(selectedRoute.segments_json || '[]');
-        } catch(e) {
-            currentCityData = {};
-            routeSegments = [];
-        }
-
-        const totalKm = parseFloat(selectedRoute.total_dist || selectedRoute.distance || 0).toFixed(1);
-        document.getElementById('total-val').innerText = totalKm + " км";
-
-        // Відображаємо інформацію про розбиття по місту/трасі у бічній панелі
-        const list = document.getElementById('city-list');
-        list.innerHTML = "";
-        for (let loc in currentCityData) {
-            const km = parseFloat(currentCityData[loc]).toFixed(1);
-            if (km < 0.1) continue;
-            list.innerHTML += `<div class="city-item" style="border-left-color: ${cityColorMap[loc] || '#7f8c8d'}">
-                <span>${cleanEmoji(loc)}</span><span>${km} км</span>
-            </div>`;
-        }
-
-        document.getElementById('status').innerText = "📍 Обрано збережений маршрут: " + cleanEmoji(selectedRoute.name || selectedRoute.route);
+            currentCityData = JSON.parse(dbRoutesList[i].details || dbRoutesList[i].cities_json || '{}');
+            routeSegments = JSON.parse(dbRoutesList[i].segments_json || '[]');
+        } catch(e){}
+        document.getElementById('status').innerText = "📍 Обрано: " + cleanEmoji(dbRoutesList[i].route || dbRoutesList[i].name);
     }
 
     function transferData() {
+        if (routeSegments.length === 0 && Object.keys(currentCityData).length === 0) {
+            return alert("Побудуйте або оберіть маршрут зі списку!");
+        }
+
         const formattedRows = [];
 
-        if (routeSegments && routeSegments.length > 0) {
+        if (routeSegments.length > 0) {
             for (let i = 0; i < routeSegments.length; i++) {
                 const seg = routeSegments[i];
                 const currentLoc = cleanEmoji(seg.loc);
@@ -509,22 +661,6 @@
 
                 formattedRows.push({ name: routeName, km: km, isHighway: isHwy });
             }
-        } else if (currentCityData && Object.keys(currentCityData).length > 0) {
-            // Резервний варіант для збережених маршрутів, у яких є лише currentCityData
-            for (let loc in currentCityData) {
-                const currentLoc = cleanEmoji(loc);
-                const km = parseFloat(currentCityData[loc]).toFixed(1);
-                if (parseFloat(km) < 0.1) continue;
-
-                let isHwy = (currentLoc === "Траса");
-                let routeName = isHwy ? "Автомобільна дорога (Траса)" : `м. ${currentLoc}`;
-
-                formattedRows.push({ name: routeName, km: km, isHighway: isHwy });
-            }
-        }
-
-        if (formattedRows.length === 0) {
-            return alert("Побудуйте або оберіть маршрут зі списку!");
         }
 
         localStorage.setItem('map_to_calc_detailed', JSON.stringify(formattedRows));
