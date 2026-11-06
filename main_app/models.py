@@ -83,6 +83,12 @@ class Calculation(models.Model):
     cargo = models.FloatField(default=0.0, verbose_name="Вага вантажу (т)")
     fuel_consumed = models.FloatField(default=0.0, verbose_name="Витрата пального (л)")
     details = models.TextField(default="{}", verbose_name="Деталі маршруту JSON")
+    # тип запису: map – маршрут з карти (із зображенням), route – маршрут (таблиця) з калькулятора,
+    # trip – поїздка з автомобілем і розрахунком; порожній – старі записи (визначаються за вмістом)
+    kind = models.CharField(max_length=10, blank=True, default="", verbose_name="Тип запису")
+    image_data = models.TextField(blank=True, default="", verbose_name="Зображення маршруту (Base64)")
+    segments_json = models.TextField(default="[]", verbose_name="Ділянки маршруту JSON")
+    meta = models.TextField(default="{}", verbose_name="Додаткові дані JSON")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Створено")
 
     class Meta:
