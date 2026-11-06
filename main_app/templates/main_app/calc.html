@@ -141,6 +141,7 @@
     <div style="display: flex; gap: 10px; margin-top: 20px;">
         <button class="btn btn-green" style="font-size:16px; height:50px; flex: 2;" onclick="calculate()">ВИКОНАТИ РОЗРАХУНОК</button>
         <button class="btn btn-purple" style="font-size:14px; height:50px; flex: 1;" onclick="saveCalculationRecord()">💾 ЗБЕРЕГТИ РОЗРАХУНОК</button>
+        <button class="btn" style="font-size:14px; height:50px; flex: 1; background:#c0392b; color:#fff;" onclick="clearRoute()">🧹 ОЧИСТИТИ МАРШРУТ</button>
     </div>
 
     <div id="results" class="results">
@@ -170,7 +171,7 @@
     const SELECTED_CAR_KEY = 'selectedCar_user_' + CURRENT_USER_ID;
 
     let loadedCalculations = {};
-    let userCityDb = {};
+    let userCityDb = JSON.parse(localStorage.getItem('city_db_permanent') || '{}');
 
     function cleanEmoji(text) {
         if (!text) return "";
@@ -179,6 +180,12 @@
 
     window.onload = function() {
         loadCitiesFromDB();
+        // спочатку відновлюємо чернетку маршруту (якщо немає свіжих даних з карти)
+        if (localStorage.getItem('map_to_calc_detailed')) {
+            draftReady = true;
+        } else {
+            restoreDraft();
+        }
         syncData();
         fetchCalculationsFromDB();
     };
@@ -218,6 +225,50 @@
         if (mapData) {
             importFromMap(mapData);
         }
+    }
+
+    // ---------- АВТОЗБЕРЕЖЕННЯ ЧЕРНЕТКИ МАРШРУТУ ----------
+    // Рядки маршруту зберігаються в sessionStorage, тому не зникають
+    // після переходу в «База ТЗ», «База міст», «Книга обліку» тощо.
+    const DRAFT_KEY = 'calc_route_draft_user_' + CURRENT_USER_ID;
+    let draftReady = false; // не зберігаємо, поки чернетку не відновлено
+
+    function saveDraft() {
+        if (!draftReady) return;
+        try {
+            sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+                rows: getCurrentRowsData(),
+                trailerActive: trailerActive,
+                gTrailler: document.getElementById('g_trailler').value
+            }));
+        } catch (e) { /* сховище недоступне — ігноруємо */ }
+    }
+
+    function restoreDraft() {
+        try {
+            const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY));
+            if (draft && Array.isArray(draft.rows) && draft.rows.length > 0) {
+                document.getElementById('city_rows').innerHTML = '';
+                draft.rows.forEach(r => appendRow(r.route, r.dist, r.cargo, r.weight, r.indK, r.isHighway));
+                if (draft.trailerActive && !trailerActive) {
+                    document.getElementById('g_trailler').value = draft.gTrailler || 0;
+                    toggleTrailer();
+                }
+            }
+        } catch (e) { /* пошкоджена чернетка — ігноруємо */ }
+        draftReady = true;
+    }
+
+    function clearRoute() {
+        if (!confirm("Очистити всі ділянки маршруту?")) return;
+        document.getElementById('city_rows').innerHTML = '';
+        try { sessionStorage.removeItem(DRAFT_KEY); } catch (e) {}
+        calculate();
+    }
+
+    function escAttr(v) {
+        return String(v === undefined || v === null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     function syncData() {
@@ -443,9 +494,9 @@
 
         row.innerHTML = `
             <td><span class="drag-handle" title="Перетягніть для зміни порядку">⋮⋮</span></td>
-            <td><input type="text" value="${cleanEmoji(route)}"></td>
+            <td><input type="text" value="${escAttr(cleanEmoji(route))}"></td>
             <td><input type="number" value="${dist}" oninput="calculate()"></td>
-            <td><input type="text" value="${cargo || '-'}"></td>
+            <td><input type="text" value="${escAttr(cargo || '-')}"></td>
             <td><input type="number" value="${weight}" oninput="calculate()"></td>
             <td><input type="number" value="${actualIndK}" ${disabledAttr} style="color:#d35400 !important;" data-old-val="${indk}" oninput="calculate()"></td>
             <td><button class="${hwyClass}" onclick="toggleRowHwyBtn(this)">Т</button></td>
@@ -559,6 +610,7 @@
     }
 
     function calculate() {
+        saveDraft();
         const carSelect = document.getElementById('carSelect');
         const car = JSON.parse(localStorage.getItem(SELECTED_CAR_KEY));
 
@@ -806,6 +858,9 @@
         localStorage.setItem('last_report_data', JSON.stringify(reportData));
         window.open('{% url "preview" %}', '_blank');
     }
+
+    // назва маршруту та вантаж не викликають calculate(), тому зберігаємо чернетку окремо
+    document.getElementById('city_rows').addEventListener('input', saveDraft);
 </script>
 
 </body>
