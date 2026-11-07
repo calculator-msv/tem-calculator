@@ -110,6 +110,7 @@ td.l .cell{ text-align:left; }
     body.print-calc .calc-page{ display:block; break-before:page; }
 }
 </style>
+{% include 'main_app/_csrf.html' %}
 </head>
 <body>
 
@@ -206,7 +207,7 @@ td.l .cell{ text-align:left; }
             Q<sub>н</sub> = 0,01 · (H<sub>san</sub> · S + H<sub>w</sub> · W) · (1 + 0,01 · K<sub>Σ</sub>)
         </div>
         <div class="formula-legend">
-            <b>де:</b> <b>H<sub>san</sub></b> — лінійна норма на пробіг автопоїзда; <b>H<sub>s</sub></b> — базова норма (л/100 км); <b>S</b> — пробіг (км); <b>H<sub>w</sub></b> — норма на транспортну роботу (л/100 т·км); <b>W</b> — обсяг роботи (т·км); <b>K<sub>Σ</sub></b> — сумарний коефіцієнт, %.
+            <b>де:</b> <b>H<sub>san</sub></b> — лінійна норма на пробіг автопоїзда, H<sub>san</sub> = H<sub>s</sub> + H<sub>g</sub> · G<sub>пр</sub> (без причепа H<sub>san</sub> = H<sub>s</sub>); <b>H<sub>s</sub></b> — базова норма (л/100 км); <b>H<sub>g</sub></b> — норма на 1 т маси причепа (прийнята рівною H<sub>w</sub>); <b>G<sub>пр</sub></b> — маса причепа, т; <b>S</b> — пробіг (км); <b>H<sub>w</sub></b> — норма на транспортну роботу (л/100 т·км); <b>W</b> — обсяг роботи (т·км); <b>K<sub>Σ</sub></b> — сумарний коефіцієнт, %.
         </div>
         <b>Розрахунок по ділянках:</b>
         <div class="formula-list" id="formulas_container"></div>
@@ -515,25 +516,31 @@ function renderServerResult(res){
     document.getElementById('m_hszm').innerText = fmt(hw);
     document.getElementById('m_sys_k').innerText = fmt(res.sys_k);
 
-    // формула відповідно до налаштування сервера
+    // формула за методичними рекомендаціями (п. 4.4, формула 5)
     document.getElementById('formula_main').innerHTML = kOnWork
-        ? 'Q<sub>н</sub> = 0,01 · (H<sub>s</sub> · S + H<sub>w</sub> · W) · (1 + 0,01 · K<sub>Σ</sub>)'
-        : 'Q<sub>н</sub> = 0,01 · H<sub>s</sub> · S · (1 + 0,01 · K<sub>Σ</sub>) + 0,01 · H<sub>w</sub> · W';
+        ? 'Q<sub>н</sub> = 0,01 · (H<sub>san</sub> · S + H<sub>w</sub> · W) · (1 + 0,01 · K<sub>Σ</sub>)'
+        : 'Q<sub>н</sub> = 0,01 · H<sub>san</sub> · S · (1 + 0,01 · K<sub>Σ</sub>) + 0,01 · H<sub>w</sub> · W';
+
+    // лінійна норма автопоїзда: Hsan = Hs + Hg · Gпр (Hg = Hw)
+    const hsan = hs + hw * trailer;
 
     let formulasHtml = '';
     const lines = [];
     res.rows.forEach((r, i) => {
         const n = i + 1;
-        const W = (r.weight + trailer) * r.dist;
-        let body, plain;
+        const W = r.weight * r.dist;                 // W = G вант · S вант, т·км
+        const hsanPart = trailer > 0 ? `${fmt(hsan)}` : `${fmt(hs)}`;
+        let body;
         if (hw > 0 && W > 0){
             body = kOnWork
-                ? `0,01 · (${fmt(hs)} · ${fmt(r.dist)} + ${fmt(hw)} · ${fmt(W)}) · (1 + 0,01 · ${fmt(r.row_k)})`
-                : `0,01 · ${fmt(hs)} · ${fmt(r.dist)} · (1 + 0,01 · ${fmt(r.row_k)}) + 0,01 · ${fmt(hw)} · ${fmt(W)}`;
+                ? `0,01 · (${hsanPart} · ${fmt(r.dist)} + ${fmt(hw)} · ${fmt(W)}) · (1 + 0,01 · ${fmt(r.row_k)})`
+                : `0,01 · ${hsanPart} · ${fmt(r.dist)} · (1 + 0,01 · ${fmt(r.row_k)}) + 0,01 · ${fmt(hw)} · ${fmt(W)}`;
         } else {
-            body = `0,01 · ${fmt(hs)} · ${fmt(r.dist)} · (1 + 0,01 · ${fmt(r.row_k)})`;
+            body = `0,01 · ${hsanPart} · ${fmt(r.dist)} · (1 + 0,01 · ${fmt(r.row_k)})`;
         }
-        formulasHtml += `<b>${n}. ${esc(r.route)}:</b><br>&nbsp;&nbsp;Q<sub>н${n}</sub> = ${body} = <b>${f2(r.q)} л</b><br>`;
+        const hsanNote = trailer > 0
+            ? `<br>&nbsp;&nbsp;<span style="color:#555;">H<sub>san</sub> = ${fmt(hs)} + ${fmt(hw)} · ${fmt(trailer)} = ${fmt(hsan)} л/100 км</span>` : '';
+        formulasHtml += `<b>${n}. ${esc(r.route)}:</b>${hsanNote}<br>&nbsp;&nbsp;Q<sub>н${n}</sub> = ${body} = <b>${f2(r.q)} л</b><br>`;
         lines.push(`${n}. ${r.route}: Qн${n} = ${body} = ${f2(r.q)} л`);
     });
     document.getElementById('formulas_container').innerHTML = formulasHtml || "<i>Немає ділянок для розрахунку</i>";
