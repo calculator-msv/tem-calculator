@@ -686,10 +686,11 @@
                 showCalcError('');
                 lastCalc = res;
                 document.getElementById('r_q').innerText = res.total_q.toFixed(2);
-                document.getElementById('r_om').innerText = res.oils.om.toFixed(2);
-                document.getElementById('r_ot').innerText = res.oils.ot.toFixed(2);
-                document.getElementById('r_os').innerText = res.oils.os.toFixed(2);
-                document.getElementById('r_op').innerText = res.oils.op.toFixed(2);
+                // оливи, вимкнені галочкою в базі ТЗ, не рахуються
+                const oilUsed = (res.car && res.car.use_om !== undefined) ? res.car : { use_om: true, use_ot: true, use_os: true, use_op: true };
+                ['om', 'ot', 'os', 'op'].forEach(k => {
+                    document.getElementById('r_' + k).innerText = oilUsed['use_' + k] ? res.oils[k].toFixed(2) : '—';
+                });
                 document.getElementById('results').style.display = 'block';
                 const sysK = document.getElementById('sys_k_val');
                 if (sysK) sysK.innerText = res.sys_k.toFixed(1) + '%';
@@ -906,6 +907,14 @@
             ot: res.car.ot || 0,
             os: res.car.os || 0,
             op: res.car.op || 0,
+            useOm: res.car.use_om !== false,
+            useOt: res.car.use_ot !== false,
+            useOs: res.car.use_os !== false,
+            useOp: res.car.use_op !== false,
+            category: res.car.category || '',
+            hasAdBlue: !!res.car.has_adblue,
+            adBlueRate: res.car.adblue || 0,
+            fuelType: res.car.fuel_type || '',
             sysK: res.sys_k,
             k4: res.k4,
             k5: res.k5,
