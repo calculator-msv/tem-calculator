@@ -70,6 +70,8 @@
             cursor: pointer;
         }
         .checkbox-group input { width: auto; cursor: pointer; }
+        .form-group label input[type="checkbox"] { width: auto; margin: 0 4px 0 0; padding: 0; vertical-align: middle; cursor: pointer; }
+        .form-group input:disabled { background: #555; color: #999; }
         .checkbox-group label { font-size: 11px; color: #f1c40f; margin: 0; cursor: pointer; }
 
         .btn-save {
@@ -252,6 +254,16 @@
         <select id="n_category"></select>
     </div>
 
+    <div class="form-group">
+        <label>Паливо, на якому їздить авто:</label>
+        <select id="n_fuel_type">
+            <option value="">— не вказано —</option>
+            <option value="Бензин А-92">Бензин А-92</option>
+            <option value="Бензин А-95">Бензин А-95</option>
+            <option value="Дизельне пальне">Дизельне пальне</option>
+        </select>
+    </div>
+
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
         <div class="form-group"><label>Hs (л/100км):</label><input type="number" id="n_hsm" step="0.01" value="0.0"></div>
         <div class="form-group"><label>Hw (л/100т·км):</label><input type="number" id="n_hw" step="0.01" value="1.3"></div>
@@ -279,11 +291,14 @@
         НОРМИ ОЛИВ (л) на 100 л ПАЛИВА
     </div>
 
+    <div style="font-size: 9px; color: #aaa; text-align: center; margin-top: 4px;">
+        Зніміть галочку, якщо цю оливу для авто рахувати не потрібно
+    </div>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 5px;">
-        <div class="form-group"><label>Мот. (M):</label><input type="number" id="n_om" step="0.01" value="2.7"></div>
-        <div class="form-group"><label>Транс. (T):</label><input type="number" id="n_ot" step="0.01" value="0.3"></div>
-        <div class="form-group"><label>Спец. (S):</label><input type="number" id="n_os" step="0.01" value="0.1"></div>
-        <div class="form-group"><label>Пласт. (P):</label><input type="number" id="n_op" step="0.01" value="0.2"></div>
+        <div class="form-group"><label><input type="checkbox" id="u_om" checked onchange="toggleOil('om')"> Мот. (M):</label><input type="number" id="n_om" step="0.01" value="2.7"></div>
+        <div class="form-group"><label><input type="checkbox" id="u_ot" checked onchange="toggleOil('ot')"> Транс. (T):</label><input type="number" id="n_ot" step="0.01" value="0.3"></div>
+        <div class="form-group"><label><input type="checkbox" id="u_os" checked onchange="toggleOil('os')"> Спец. (S):</label><input type="number" id="n_os" step="0.01" value="0.1"></div>
+        <div class="form-group"><label><input type="checkbox" id="u_op" checked onchange="toggleOil('op')"> Пласт. (P):</label><input type="number" id="n_op" step="0.01" value="0.2"></div>
     </div>
 
     <button class="btn-save" id="saveBtn" onclick="saveCar()">💾 Зберегти в базу</button>
@@ -369,7 +384,12 @@
                             om: parseFloat(item.om),
                             ot: parseFloat(item.ot),
                             os: parseFloat(item.os),
-                            op: parseFloat(item.op)
+                            op: parseFloat(item.op),
+                            fuelType: item.fuel_type || '',
+                            useOm: item.use_om !== false,
+                            useOt: item.use_ot !== false,
+                            useOs: item.use_os !== false,
+                            useOp: item.use_op !== false
                         };
 
                         if (item.category && !categories.includes(item.category)) {
@@ -460,10 +480,12 @@
                                     <span><b>Hw (вантаж):</b> ${car.hsz || 0} л</span>
                                     <span><b>Макс. вантаж:</b> ${car.maxPayload ? car.maxPayload + ' т' : 'Н/Д'}</span>
                                     <span><b>AdBlue норма:</b> ${car.hasAdBlue ? car.adBlueRate + '%' : 'Ні'}</span>
-                                    <span><b>Моторна (M):</b> ${car.om} л</span>
-                                    <span><b>Трансм. (T):</b> ${car.ot} л</span>
-                                    <span><b>Спеціальна (S):</b> ${car.os} л</span>
-                                    <span><b>Пластична (P):</b> ${car.op} л</span>
+                                    <span><b>Паливо:</b> ${car.fuelType || 'не вказано'}</span>
+                                    <span><b>Вид ТЗ:</b> ${car.category || '—'}</span>
+                                    <span><b>Моторна (M):</b> ${car.useOm === false ? 'не рахується' : car.om + ' л'}</span>
+                                    <span><b>Трансм. (T):</b> ${car.useOt === false ? 'не рахується' : car.ot + ' л'}</span>
+                                    <span><b>Спеціальна (S):</b> ${car.useOs === false ? 'не рахується' : car.os + ' л'}</span>
+                                    <span><b>Пластична (P):</b> ${car.useOp === false ? 'не рахується' : car.op + ' л'}</span>
                                 </div>
                                 <button class="btn-select-calc" onclick="event.stopPropagation(); selectForCalc('${id}')">Обрати для розрахунку</button>
                             </div>
@@ -521,6 +543,18 @@
 
     function setField(id, value) { document.getElementById(id).value = value; }
 
+    // галочка біля оливи: вимкнена олива не рахується, поле норми недоступне
+    function toggleOil(key) {
+        document.getElementById('n_' + key).disabled = !document.getElementById('u_' + key).checked;
+    }
+
+    function setOilFlags(om, ot, os, op) {
+        [['om', om], ['ot', ot], ['os', os], ['op', op]].forEach(([k, v]) => {
+            document.getElementById('u_' + k).checked = v;
+            toggleOil(k);
+        });
+    }
+
     function resetForm() {
         editingKey = null;
         document.getElementById('sidebar').classList.remove('edit-mode');
@@ -538,6 +572,8 @@
         setField('n_adblue_rate', '4.0');
         document.getElementById('n_has_cargo').checked = false;
         document.getElementById('n_has_adblue').checked = false;
+        setField('n_fuel_type', '');
+        setOilFlags(true, true, true, true);
         toggleCargoInput();
         toggleAdBlueInput();
     }
@@ -565,6 +601,8 @@
         setField('n_max_payload', car.maxPayload || 0);
         document.getElementById('n_has_adblue').checked = !!car.hasAdBlue;
         setField('n_adblue_rate', car.adBlueRate || 0);
+        setField('n_fuel_type', car.fuelType || '');
+        setOilFlags(car.useOm !== false, car.useOt !== false, car.useOs !== false, car.useOp !== false);
         toggleCargoInput();
         toggleAdBlueInput();
         render();
@@ -603,6 +641,9 @@
         formData.append('ot', parseFloat(document.getElementById('n_ot').value) || 0);
         formData.append('os', parseFloat(document.getElementById('n_os').value) || 0);
         formData.append('op', parseFloat(document.getElementById('n_op').value) || 0);
+        formData.append('fuel_type', document.getElementById('n_fuel_type').value);
+        ['om', 'ot', 'os', 'op'].forEach(k =>
+            formData.append('use_' + k, document.getElementById('u_' + k).checked ? '1' : '0'));
         formData.append('has_adblue', hasAdBlue ? '1' : '0');
         formData.append('adblue', hasAdBlue ? (parseFloat(document.getElementById('n_adblue_rate').value) || 0) : 0);
 
