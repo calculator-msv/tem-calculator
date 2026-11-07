@@ -1,0 +1,20 @@
+<script>
+/* CSRF: до кожного POST-запиту на цей самий сайт додаємо заголовок X-CSRFToken.
+   Запити на зовнішні сайти (карти, геокодер) не змінюються. */
+(function () {
+    var token = "{{ csrf_token }}";
+    var nativeFetch = window.fetch;
+    window.fetch = function (input, init) {
+        init = init || {};
+        var url = typeof input === 'string' ? input : (input && input.url) || '';
+        var sameOrigin = url.charAt(0) === '/' || url.indexOf(location.origin + '/') === 0;
+        var method = (init.method || (input && input.method) || 'GET').toUpperCase();
+        if (sameOrigin && method !== 'GET' && method !== 'HEAD') {
+            var headers = new Headers(init.headers || (input && input.headers) || {});
+            if (!headers.has('X-CSRFToken')) headers.set('X-CSRFToken', token);
+            init = Object.assign({}, init, { headers: headers });
+        }
+        return nativeFetch.call(this, input, init);
+    };
+})();
+</script>
