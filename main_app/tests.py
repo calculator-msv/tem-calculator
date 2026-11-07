@@ -255,6 +255,26 @@ class CarEditTests(TestCase):
         self.assertEqual(car.adblue, 0)           # AdBlue вимкнено — норма скидається
         self.assertEqual(Vehicle.objects.count(), 1)
 
+    def test_fuel_type_and_oil_flags_are_saved(self):
+        res = self.api(action='update_car', id=self.car.id, name='УАЗ', fuel_type='Бензин А-95',
+                       hs='30', hw='1.3', use_om='1', use_ot='0', use_os='0', use_op='1')
+        self.assertTrue(res['success'])
+        car = Vehicle.objects.get(pk=self.car.pk)
+        self.assertEqual(car.fuel_type, 'Бензин А-95')
+        self.assertEqual((car.use_om, car.use_ot, car.use_os, car.use_op), (True, False, False, True))
+        listed = self.api(action='fetch_cars')['data'][0]
+        self.assertEqual(listed['fuel_type'], 'Бензин А-95')
+        self.assertFalse(listed['use_ot'])
+
+    def test_unknown_fuel_type_is_dropped(self):
+        self.api(action='update_car', id=self.car.id, name='УАЗ', fuel_type='Щось інше', hs='30')
+        self.assertEqual(Vehicle.objects.get(pk=self.car.pk).fuel_type, '')
+
+    def test_new_car_uses_all_oils_by_default(self):
+        self.api(action='add_car', name='Новий', hs='20')
+        car = Vehicle.objects.get(name='Новий')
+        self.assertTrue(car.use_om and car.use_ot and car.use_os and car.use_op)
+
     def test_update_requires_name(self):
         self.assertFalse(self.api(action='update_car', id=self.car.id, name=' ')['success'])
 
@@ -322,3 +342,19 @@ class CsrfAndAdminTests(TestCase):
             admin.save()
             create_admin(sender=None)               # повторний запуск не чіпає пароль
         self.assertTrue(User.objects.get(username='admin').check_password('changed-by-owner'))
+
+
+class OilFlagsCalcTests(TestCase):
+    def test_disabled_oils_are_not_counted(self):
+        user = User.objects.create_user(username='oil@t.ua', email='oil@t.ua', password='123456')
+        car = Vehicle.objects.create(user=user, name='ГАЗ', hs=30, hw=1.3, om=2.7, ot=0.3, os=0.1, op=0.2,
+                                     use_ot=False, use_os=False, fuel_type='Дизельне пальне', category='Вантажні')
+        self.client.login(username='oil@t.ua', password='123456')
+        r = self.client.post('/api/calc/', data=json.dumps({'car_id': car.id, 'rows': [{'dist': 100, 'weight': 0}]}),
+                             content_type='application/json').json()
+        self.assertAlmostEqual(r['oils']['om'], 30 * 2.7 / 100, places=4)
+        self.assertEqual(r['oils']['ot'], 0)
+        self.assertEqual(r['oils']['os'], 0)
+        self.assertAlmostEqual(r['oils']['op'], 30 * 0.2 / 100, places=4)
+        self.assertEqual((r['car']['use_ot'], r['car']['fuel_type'], r['car']['category']),
+                         (False, 'Дизельне пальне', 'Вантажні'))
