@@ -495,7 +495,15 @@ td[contenteditable="true"]{ outline:none; }
         const os = (totalQ * (parseFloat(last.os) || 0) / 100).toFixed(2);
         const op = (totalQ * (parseFloat(last.op) || 0) / 100).toFixed(2);
 
-        let oilFormat = `${om}<br>${ot}<br>${os}<br>${op}`;
+        // оливи, вимкнені галочкою в базі ТЗ, не рахуються — замість числа ставимо риску
+        const oilUse = {
+            om: last.useOm !== false, ot: last.useOt !== false,
+            os: last.useOs !== false, op: last.useOp !== false
+        };
+        let oilFormat = [
+            oilUse.om ? om : '-', oilUse.ot ? ot : '-',
+            oilUse.os ? os : '-', oilUse.op ? op : '-'
+        ].join('<br>');
 
         if (last.hasAdBlue) {
             const adBlueVal = (totalQ * (parseFloat(last.adBlueRate) || 0) / 100).toFixed(2);
@@ -513,7 +521,7 @@ td[contenteditable="true"]{ outline:none; }
             }
         }
 
-        let carCategory = selectedCarObj.category || "";
+        let carCategory = last.category || selectedCarObj.category || "";
         const carsDB = JSON.parse(localStorage.getItem('cars')) || {};
 
         if (!carCategory) {
@@ -551,9 +559,21 @@ td[contenteditable="true"]{ outline:none; }
             bookHeader.car_plate = extractedPlate;
         }
 
+        // нижні два рядки книги: застосоване паливо та оливи (з бази ТЗ)
         if (last.fuelType) {
             document.getElementById('fuel_type_display').innerText = last.fuelType;
             bookHeader.fuel_type = last.fuelType;
+        }
+        const oilNames = [];
+        if (oilUse.om) oilNames.push('моторна олива');
+        if (oilUse.ot) oilNames.push('трансмісійна олива');
+        if (oilUse.os) oilNames.push('спеціальна олива');
+        if (oilUse.op) oilNames.push('пластичне мастило');
+        if (last.hasAdBlue) oilNames.push('AdBlue');
+        if (last.serverCalculated) {
+            const oilText = oilNames.join(', ');
+            document.getElementById('oil_type_display').innerText = oilText;
+            bookHeader.oil_type = oilText;
         }
 
         const newEntry = {
