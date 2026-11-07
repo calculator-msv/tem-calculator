@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from .models import Vehicle, City, UserCoeff, Calculation, UserBook, UserNote, UserLibrary
+from .models import (Vehicle, City, UserCoeff, Calculation, MapRoute, SavedRoute, Trip,
+                     UserBook, BookState, UserNote, UserLibrary)
 
 # --- Розширений перегляд користувачів ---
 class CustomUserAdmin(BaseUserAdmin):
@@ -37,8 +38,31 @@ class UserCoeffAdmin(admin.ModelAdmin):
     search_fields = ('name', 'user__username')
 
 
+@admin.register(MapRoute)
+class MapRouteAdmin(admin.ModelAdmin):
+    list_display = ('name', 'distance', 'user', 'created_at')
+    list_filter = ('user', 'created_at')
+    search_fields = ('name', 'user__username')
+    exclude = ('image_data',)
+
+
+@admin.register(SavedRoute)
+class SavedRouteAdmin(admin.ModelAdmin):
+    list_display = ('name', 'distance', 'max_weight', 'user', 'created_at')
+    list_filter = ('user', 'created_at')
+    search_fields = ('name', 'user__username')
+
+
+@admin.register(Trip)
+class TripAdmin(admin.ModelAdmin):
+    list_display = ('name', 'car', 'distance', 'fuel_consumed', 'user', 'created_at')
+    list_filter = ('user', 'created_at')
+    search_fields = ('name', 'user__username')
+
+
 @admin.register(Calculation)
 class CalculationAdmin(admin.ModelAdmin):
+    """Старий архів (до розділення таблиць): лише для перегляду, нові записи сюди не пишуться."""
     list_display = ('route', 'kind', 'distance', 'fuel_consumed', 'user', 'created_at')
     list_filter = ('kind', 'user', 'created_at')
     exclude = ('image_data',)
@@ -58,3 +82,8 @@ class UserNoteAdmin(admin.ModelAdmin):
 @admin.register(UserLibrary)
 class UserLibraryAdmin(admin.ModelAdmin):
     list_display = ('file_name', 'user', 'uploaded_at')
+
+
+@admin.register(BookState)
+class BookStateAdmin(admin.ModelAdmin):
+    list_display = ('user', 'car_title', 'updated_at')
