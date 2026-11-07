@@ -207,10 +207,11 @@ def calculate_fuel(vehicle, rows, base_k, k4, k5, trailer_mass=0.0):
         'dist_out': round(dist_out, 3),
         'max_weight': max_weight,
         'oils': {
-            'om': round(total_q * _num(vehicle.om) / 100, 6),
-            'ot': round(total_q * _num(vehicle.ot) / 100, 6),
-            'os': round(total_q * _num(vehicle.os) / 100, 6),
-            'op': round(total_q * _num(vehicle.op) / 100, 6),
+            # оливи, які для цього авто вимкнені галочкою, не рахуються
+            'om': round(total_q * _num(vehicle.om) / 100, 6) if vehicle.use_om else 0.0,
+            'ot': round(total_q * _num(vehicle.ot) / 100, 6) if vehicle.use_ot else 0.0,
+            'os': round(total_q * _num(vehicle.os) / 100, 6) if vehicle.use_os else 0.0,
+            'op': round(total_q * _num(vehicle.op) / 100, 6) if vehicle.use_op else 0.0,
         },
     }
 
@@ -248,9 +249,17 @@ def calc_api(request):
         'id': vehicle.id, 'name': vehicle.name, 'plate': vehicle.plate,
         'hs': vehicle.hs, 'hw': vehicle.hw, 'max_payload': vehicle.max_payload,
         'om': vehicle.om, 'ot': vehicle.ot, 'os': vehicle.os, 'op': vehicle.op,
+        'use_om': vehicle.use_om, 'use_ot': vehicle.use_ot,
+        'use_os': vehicle.use_os, 'use_op': vehicle.use_op,
+        'category': vehicle.category, 'fuel_type': vehicle.fuel_type,
+        'has_adblue': vehicle.has_adblue, 'adblue': vehicle.adblue,
     }
     result['success'] = True
     return JsonResponse(result)
+
+
+# Дозволені види пального в базі ТЗ (підтягуються в книгу обліку)
+FUEL_TYPES = ('Бензин А-92', 'Бензин А-95', 'Дизельне пальне')
 
 
 # --- API ДЛЯ БАЗИ МІСТ (cities.html) ---
@@ -348,6 +357,9 @@ def cars_api(request):
 
                 has_cargo = str(request.POST.get('has_cargo')) == '1'
                 has_adblue = str(request.POST.get('has_adblue')) == '1'
+                fuel_type = request.POST.get('fuel_type', '').strip()
+                if fuel_type not in FUEL_TYPES:
+                    fuel_type = ''
                 fields = dict(
                     name=name_val,
                     plate=(request.POST.get('plate', 'Б/Н').strip() or 'Б/Н')[:20],
@@ -362,6 +374,11 @@ def cars_api(request):
                     op=max(_num(request.POST.get('op')), 0.0),
                     has_adblue=has_adblue,
                     adblue=max(_num(request.POST.get('adblue')), 0.0) if has_adblue else 0.0,
+                    fuel_type=fuel_type,
+                    use_om=request.POST.get('use_om', '1') == '1',
+                    use_ot=request.POST.get('use_ot', '1') == '1',
+                    use_os=request.POST.get('use_os', '1') == '1',
+                    use_op=request.POST.get('use_op', '1') == '1',
                 )
                 if action == 'add_car':
                     car = Vehicle.objects.create(user=request.user, **fields)
