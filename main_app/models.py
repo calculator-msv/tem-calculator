@@ -17,6 +17,11 @@ class Vehicle(models.Model):
     op = models.FloatField(default=0.2, verbose_name="Пластичне мастило (P)")
     has_adblue = models.BooleanField(default=False, verbose_name="AdBlue")
     adblue = models.FloatField(default=0.0, verbose_name="AdBlue норма %")
+    fuel_type = models.CharField(max_length=50, blank=True, default='', verbose_name="Вид пального")
+    use_om = models.BooleanField(default=True, verbose_name="Рахувати моторну олію")
+    use_ot = models.BooleanField(default=True, verbose_name="Рахувати трансмісійну олію")
+    use_os = models.BooleanField(default=True, verbose_name="Рахувати спеціальну олію")
+    use_op = models.BooleanField(default=True, verbose_name="Рахувати пластичне мастило")
 
     class Meta:
         verbose_name = "Автомобіль"
