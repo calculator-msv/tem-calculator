@@ -18,3 +18,39 @@
     };
 })();
 </script>
+<script>
+/* Повідомлення без системного вікна «Повідомлення з …»:
+   alert("текст") показує короткий напис знизу екрана, який зникає сам і нічого не блокує.
+   Помилки (текст починається з «Помилка» / «Не вдалося» / «Не знайдено» тощо) — червоні, решта — зелені. */
+(function () {
+    var box = null;
+    function getBox() {
+        if (box && document.body.contains(box)) return box;
+        box = document.createElement('div');
+        box.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;' +
+            'display:flex;flex-direction:column;gap:8px;align-items:center;width:calc(100% - 32px);max-width:420px;pointer-events:none;';
+        document.body.appendChild(box);
+        return box;
+    }
+    function isError(text) {
+        return /^(помилка|не вдалос|не вдає|не знайдено|невалід|будь ласка|введіть|заповніть|оберіть|додайте|немає|не можна)/i.test(text) ||
+            /помилк/i.test(text);
+    }
+    window.alert = function (message) {
+        var text = String(message == null ? '' : message).trim();
+        if (!text) return;
+        var el = document.createElement('div');
+        var err = isError(text);
+        el.textContent = text;
+        el.style.cssText = 'pointer-events:auto;box-sizing:border-box;width:100%;padding:11px 16px;border-radius:8px;' +
+            'font:600 13px/1.35 system-ui,Segoe UI,Arial,sans-serif;color:#fff;text-align:center;cursor:pointer;' +
+            'box-shadow:0 6px 20px rgba(0,0,0,.45);opacity:0;transition:opacity .2s;' +
+            'background:' + (err ? '#c0392b' : '#1e8449') + ';border:1px solid ' + (err ? '#e74c3c' : '#2ecc71') + ';';
+        function close() { el.style.opacity = '0'; setTimeout(function () { el.remove(); }, 250); }
+        el.onclick = close;
+        getBox().appendChild(el);
+        requestAnimationFrame(function () { el.style.opacity = '1'; });
+        setTimeout(close, err ? 5000 : 2800);
+    };
+})();
+</script>
