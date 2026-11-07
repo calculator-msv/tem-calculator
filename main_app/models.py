@@ -74,7 +74,67 @@ class UserCoeff(models.Model):
         return f"{self.name} ({self.value}%) - {self.user.username}"
 
 
-# 4. Збережені розрахунки калькулятора
+# 4. Маршрути з карти, маршрути та поїздки калькулятора — три окремі таблиці
+class MapRoute(models.Model):
+    """Маршрут, збережений на карті (із зображенням і розбивкою по ділянках)."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Користувач")
+    name = models.CharField(max_length=255, verbose_name="Назва маршруту")
+    distance = models.FloatField(default=0.0, verbose_name="Відстань (км)")
+    cities_json = models.TextField(default="{}", verbose_name="Відстані по населених пунктах JSON")
+    segments_json = models.TextField(default="[]", verbose_name="Ділянки маршруту JSON")
+    image_data = models.TextField(blank=True, default="", verbose_name="Зображення маршруту (Base64)")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Створено")
+
+    class Meta:
+        verbose_name = "Маршрут з карти"
+        verbose_name_plural = "Маршрути з карти"
+
+    def __str__(self):
+        return f"{self.name} - {self.distance} км ({self.user.username})"
+
+
+class SavedRoute(models.Model):
+    """Маршрут з калькулятора: лише таблиця ділянок, без автомобіля та розрахунку."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Користувач")
+    name = models.CharField(max_length=255, verbose_name="Назва маршруту")
+    distance = models.FloatField(default=0.0, verbose_name="Відстань (км)")
+    max_weight = models.FloatField(default=0.0, verbose_name="Макс. вага вантажу (т)")
+    trailer = models.FloatField(default=0.0, verbose_name="Маса причепа (т)")
+    rows_json = models.TextField(default="[]", verbose_name="Ділянки (таблиця) JSON")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Створено")
+
+    class Meta:
+        verbose_name = "Маршрут калькулятора"
+        verbose_name_plural = "Маршрути калькулятора"
+
+    def __str__(self):
+        return f"{self.name} - {self.distance} км ({self.user.username})"
+
+
+class Trip(models.Model):
+    """Поїздка: таблиця ділянок + автомобіль + розрахунок пального."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Користувач")
+    car = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Автомобіль")
+    name = models.CharField(max_length=255, verbose_name="Назва поїздки")
+    distance = models.FloatField(default=0.0, verbose_name="Відстань (км)")
+    max_weight = models.FloatField(default=0.0, verbose_name="Макс. вага вантажу (т)")
+    trailer = models.FloatField(default=0.0, verbose_name="Маса причепа (т)")
+    fuel_consumed = models.FloatField(default=0.0, verbose_name="Витрата пального (л)")
+    rows_json = models.TextField(default="[]", verbose_name="Ділянки (таблиця) JSON")
+    meta = models.TextField(default="{}", verbose_name="Додаткові дані JSON")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Створено")
+
+    class Meta:
+        verbose_name = "Поїздка"
+        verbose_name_plural = "Поїздки"
+
+    def __str__(self):
+        return f"{self.name} - {self.fuel_consumed} л ({self.user.username})"
+
+
+# Старе спільне сховище (map / route / trip в одній таблиці). Нові записи сюди більше
+# не пишуться: дані перенесено міграцією 0006. Модель залишено як резервну копію;
+# після перевірки її можна видалити окремою міграцією.
 class Calculation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Користувач")
     car = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Автомобіль")
@@ -92,8 +152,8 @@ class Calculation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Створено")
 
     class Meta:
-        verbose_name = "Розрахунок"
-        verbose_name_plural = "Збережені розрахунки"
+        verbose_name = "Розрахунок (старий архів)"
+        verbose_name_plural = "Старий архів розрахунків"
 
     def __str__(self):
         return f"{self.route} - {self.distance} км ({self.user.username})"
@@ -116,6 +176,24 @@ class UserBook(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.car_title})"
+
+
+class BookState(models.Model):
+    """Поточна (незбережена в архів) книга обліку користувача: шапка та рядки таблиці."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name="Користувач")
+    car_title = models.TextField(blank=True, default="", verbose_name="Автомобіль (HTML)")
+    car_plate = models.CharField(max_length=50, blank=True, default="", verbose_name="Номерний знак")
+    fuel_type = models.CharField(max_length=100, blank=True, default="", verbose_name="Вид пального")
+    oil_type = models.CharField(max_length=100, blank=True, default="", verbose_name="Вид оливи")
+    entries_data = models.TextField(default="[]", verbose_name="Записи JSON")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Оновлено")
+
+    class Meta:
+        verbose_name = "Поточна книга обліку"
+        verbose_name_plural = "Поточні книги обліку"
+
+    def __str__(self):
+        return f"Поточна книга ({self.user.username})"
 
 
 # 6. Нотатки та Електронна бібліотека (PDF)
