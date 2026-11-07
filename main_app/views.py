@@ -7,9 +7,9 @@ from django.db.models.functions import Length
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from .models import Vehicle, City, UserCoeff, Calculation, UserBook, UserNote, UserLibrary
+from .models import (Vehicle, City, UserCoeff, MapRoute, SavedRoute, Trip,
+                     UserBook, BookState, UserNote, UserLibrary)
 
 
 # --- ГОЛОВНА СТОРІНКА ТА АВТОРИЗАЦІЯ ---
@@ -109,12 +109,11 @@ def preview_view(request):
 # РОЗРАХУНОК ПАЛЬНОГО НА СЕРВЕРІ (єдине місце з формулою)
 # =====================================================================
 # Чи множити коефіцієнт (1 + 0,01·K) також на транспортну роботу Hw·W.
-#   False – як рахував калькулятор у браузері до перенесення на сервер:
-#           Q = 0,01·Hs·S·(1 + 0,01·K) + 0,01·Hw·W
-#   True  – за формулою з методики та реферату:
-#           Q = 0,01·(Hs·S + Hw·W)·(1 + 0,01·K)
-# Оберіть варіант, який відповідає чинному наказу (див. реферат, формула 2.1).
-K_APPLIES_TO_TRANSPORT_WORK = False
+#   True  – за методичними рекомендаціями (п. 4.4, формула 5):
+#           Q = 0,01·(Hsan·S + Hw·W)·(1 + 0,01·K),  Hsan = Hs + Hg·Gпр
+#           (маса причепа входить до Hsan; норма Hg на 1 т причепа прийнята рівною Hw)
+#   False – старий варіант: Q = 0,01·Hs·S·(1 + 0,01·K) + 0,01·Hw·W
+K_APPLIES_TO_TRANSPORT_WORK = True
 
 MAX_ROWS = 500
 
@@ -247,7 +246,7 @@ def calc_api(request):
     result['k_on_work'] = K_APPLIES_TO_TRANSPORT_WORK
     result['car'] = {
         'id': vehicle.id, 'name': vehicle.name, 'plate': vehicle.plate,
-        'hs': vehicle.hs, 'hw': vehicle.hw,
+        'hs': vehicle.hs, 'hw': vehicle.hw, 'max_payload': vehicle.max_payload,
         'om': vehicle.om, 'ot': vehicle.ot, 'os': vehicle.os, 'op': vehicle.op,
     }
     result['success'] = True
@@ -255,43 +254,42 @@ def calc_api(request):
 
 
 # --- API ДЛЯ БАЗИ МІСТ (cities.html) ---
-@csrf_exempt
+def _visible_cities(user):
+    """Власні міста користувача + «спільні» (старі записи без власника).
+    Якщо у користувача є місто з такою самою назвою, спільне не показується."""
+    own = list(City.objects.filter(user=user).order_by('name').values('id', 'name', 'percent'))
+    own_names = {c['name'] for c in own}
+    shared = [c for c in City.objects.filter(user__isnull=True).order_by('name').values('id', 'name', 'percent')
+              if c['name'] not in own_names]
+    return [{'id': c['id'], 'name': c['name'], 'percent': str(c['percent'])} for c in own + shared]
+
+
 @login_required
+@require_POST
 def cities_api(request):
-    if request.method == 'POST':
-        action = request.POST.get('action')
+    action = request.POST.get('action')
 
-        if action == 'fetch_cities':
-            cities = list(City.objects.all().values('id', 'name', 'percent'))
-            formatted = [{'id': c['id'], 'name': c['name'], 'percent': str(c['percent'])} for c in cities]
-            return JsonResponse({'success': True, 'data': formatted})
-
-        elif action == 'add_city':
-            name = request.POST.get('name', '').strip()
-            percent = float(request.POST.get('percent', 0) or 0)
-            if name:
-                city, created = City.objects.get_or_create(
-                    name=name,
-                    defaults={'percent': percent, 'user': request.user}
-                )
-                if not created:
-                    city.percent = percent
-                    city.save()
-                return JsonResponse({'success': True})
+    if action == 'add_city':
+        name = request.POST.get('name', '').strip()[:100]
+        if not name:
             return JsonResponse({'success': False, 'message': 'Заповніть назву міста'})
+        percent = _num(request.POST.get('percent', 0))
+        city, created = City.objects.get_or_create(
+            user=request.user, name=name, defaults={'percent': percent})
+        if not created:
+            city.percent = percent
+            city.save()
+        return JsonResponse({'success': True})
 
-        elif action == 'delete_city':
-            city_id = request.POST.get('city_id')
-            City.objects.filter(id=city_id).delete()
-            return JsonResponse({'success': True})
+    elif action == 'delete_city':
+        # видаляти можна лише власні міста
+        City.objects.filter(id=request.POST.get('city_id'), user=request.user).delete()
+        return JsonResponse({'success': True})
 
-    cities = list(City.objects.all().values('id', 'name', 'percent'))
-    formatted = [{'id': c['id'], 'name': c['name'], 'percent': str(c['percent'])} for c in cities]
-    return JsonResponse({'success': True, 'data': formatted})
+    return JsonResponse({'success': True, 'data': _visible_cities(request.user)})
 
 
 # --- API ДЛЯ ПЕРСОНАЛЬНИХ КОЕФІЦІЄНТІВ (coeffs.html) ---
-@csrf_exempt
 @login_required
 def coeffs_api(request):
     if request.method == 'POST':
@@ -337,7 +335,6 @@ def coeffs_api(request):
 
 
 # --- API ДЛЯ КЕРУВАННЯ АВТОПАРКОМ (cars.html) ---
-@csrf_exempt
 @login_required
 def cars_api(request):
     if request.method == 'POST':
@@ -347,31 +344,49 @@ def cars_api(request):
             cars = list(Vehicle.objects.filter(user=request.user).values())
             return JsonResponse({'success': True, 'data': cars})
 
-        elif action == 'add_car':
+        elif action in ('add_car', 'update_car'):
             try:
-                name_val = request.POST.get('name', '').strip()
+                name_val = request.POST.get('name', '').strip()[:100]
                 if not name_val:
                     return JsonResponse({'success': False, 'message': 'Назва ТЗ обов\'язкова!'})
 
-                car = Vehicle.objects.create(
-                    user=request.user,
+                has_cargo = str(request.POST.get('has_cargo')) == '1'
+                has_adblue = str(request.POST.get('has_adblue')) == '1'
+                fields = dict(
                     name=name_val,
-                    plate=request.POST.get('plate', 'Б/Н').strip() or 'Б/Н',
-                    category=request.POST.get('category', 'Вантажні'),
-                    hs=float(request.POST.get('hs', 0) or 0),
-                    hw=float(request.POST.get('hw', 0) or 0),
-                    has_cargo=str(request.POST.get('has_cargo')) == '1',
-                    max_payload=float(request.POST.get('max_payload', 0) or 0),
-                    om=float(request.POST.get('om', 2.7) or 0),
-                    ot=float(request.POST.get('ot', 0.3) or 0),
-                    os=float(request.POST.get('os', 0.1) or 0),
-                    op=float(request.POST.get('op', 0.2) or 0),
-                    has_adblue=str(request.POST.get('has_adblue')) == '1',
-                    adblue=float(request.POST.get('adblue', 0) or 0)
+                    plate=(request.POST.get('plate', 'Б/Н').strip() or 'Б/Н')[:20],
+                    category=(request.POST.get('category') or 'Вантажні').strip()[:50],
+                    hs=max(_num(request.POST.get('hs')), 0.0),
+                    hw=max(_num(request.POST.get('hw')), 0.0),
+                    has_cargo=has_cargo,
+                    max_payload=max(_num(request.POST.get('max_payload')), 0.0) if has_cargo else 0.0,
+                    om=max(_num(request.POST.get('om')), 0.0),
+                    ot=max(_num(request.POST.get('ot')), 0.0),
+                    os=max(_num(request.POST.get('os')), 0.0),
+                    op=max(_num(request.POST.get('op')), 0.0),
+                    has_adblue=has_adblue,
+                    adblue=max(_num(request.POST.get('adblue')), 0.0) if has_adblue else 0.0,
                 )
+                if action == 'add_car':
+                    car = Vehicle.objects.create(user=request.user, **fields)
+                    return JsonResponse({'success': True, 'db_id': car.id})
+
+                car = Vehicle.objects.filter(id=request.POST.get('id'), user=request.user).first()
+                if car is None:
+                    return JsonResponse({'success': False, 'message': 'Автомобіль не знайдено'})
+                for key, value in fields.items():
+                    setattr(car, key, value)
+                car.save()
                 return JsonResponse({'success': True, 'db_id': car.id})
             except Exception as e:
-                return JsonResponse({'success': False, 'message': f'Помилка створення ТЗ: {str(e)}'})
+                return JsonResponse({'success': False, 'message': f'Помилка збереження ТЗ: {str(e)}'})
+
+        elif action == 'update_category':
+            category = (request.POST.get('category') or '').strip()[:50]
+            if not category:
+                return JsonResponse({'success': False, 'message': 'Порожня категорія'})
+            Vehicle.objects.filter(id=request.POST.get('id'), user=request.user).update(category=category)
+            return JsonResponse({'success': True})
 
         elif action == 'delete_car':
             car_id = request.POST.get('id')
@@ -382,16 +397,16 @@ def cars_api(request):
 
 
 # --- API ДЛЯ МАРШРУТІВ З КАРТИ ТА ІСТОРІЇ КАЛЬКУЛЯТОРА (map.html, calc.html) ---
-# Один і той самий розділ бази, але ТРИ незалежні списки (поле kind):
-#   map   – маршрути, збережені на карті (із зображенням і ділянками);
-#   route – маршрути (лише таблиця ділянок), збережені в калькуляторі без авто;
-#   trip  – поїздки: таблиця + автомобіль + розрахунок пального.
+# Три НЕЗАЛЕЖНІ таблиці (kind у запитах API вибирає таблицю):
+#   map   – MapRoute:   маршрути, збережені на карті (із зображенням і ділянками);
+#   route – SavedRoute: маршрути (лише таблиця ділянок), збережені в калькуляторі без авто;
+#   trip  – Trip:       поїздки: таблиця + автомобіль + розрахунок пального.
 # Кожне збереження створює НОВИЙ запис, тому редагування в калькуляторі
 # ніколи не змінює маршрути, збережені на карті.
+# Формат відповідей збережено сумісним зі сторінками map.html і calc.html.
 MAX_IMAGE_CHARS = 3_000_000   # ~2,2 МБ зображення у Base64
 
-LIST_FIELDS = ('id', 'route', 'distance', 'cargo', 'fuel_consumed', 'details',
-               'segments_json', 'meta', 'kind', 'car_id', 'created_at')
+RECORD_MODELS = {'map': MapRoute, 'route': SavedRoute, 'trip': Trip}
 
 
 def _json_loads(text, default):
@@ -401,31 +416,48 @@ def _json_loads(text, default):
         return default
 
 
-def _effective_kind(item):
-    """Тип запису; для старих записів (kind порожній) визначається за вмістом."""
-    if item['kind']:
-        return item['kind']
-    details = _json_loads(item['details'], {})
-    if isinstance(details, list):
-        return 'trip' if (item['car_id'] or (item['fuel_consumed'] or 0) > 0) else 'route'
-    return 'map'
-
-
-def _list_records(user, kind):
-    qs = (Calculation.objects.filter(user=user).order_by('-id')
+def _list_map_routes(user):
+    qs = (MapRoute.objects.filter(user=user).order_by('-id')
           .annotate(img_len=Length('image_data'))
-          .values(*LIST_FIELDS, 'img_len'))
+          .values('id', 'name', 'distance', 'cities_json', 'segments_json', 'created_at', 'img_len'))
+    return [{
+        'id': r['id'], 'route': r['name'], 'distance': r['distance'], 'cargo': 0, 'fuel_consumed': 0,
+        'details': r['cities_json'], 'segments_json': r['segments_json'], 'meta': '{}',
+        'kind': 'map', 'car_id': None, 'created_at': r['created_at'],
+        'has_image': bool(r['img_len']),
+    } for r in qs]
+
+
+def _list_saved_routes(user):
+    qs = (SavedRoute.objects.filter(user=user).order_by('-id')
+          .values('id', 'name', 'distance', 'max_weight', 'trailer', 'rows_json', 'created_at'))
+    return [{
+        'id': r['id'], 'route': r['name'], 'distance': r['distance'], 'cargo': r['max_weight'],
+        'fuel_consumed': 0, 'details': r['rows_json'], 'segments_json': '[]',
+        'meta': {'trailer': r['trailer']}, 'kind': 'route', 'car_id': None,
+        'created_at': r['created_at'], 'has_image': False,
+    } for r in qs]
+
+
+def _list_trips(user):
+    qs = (Trip.objects.filter(user=user).order_by('-id')
+          .values('id', 'name', 'distance', 'max_weight', 'trailer', 'fuel_consumed',
+                  'rows_json', 'meta', 'car_id', 'created_at'))
     out = []
-    for item in qs:
-        if _effective_kind(item) != kind:
-            continue
-        item['kind'] = kind
-        item['has_image'] = bool(item.pop('img_len'))
-        out.append(item)
+    for r in qs:
+        meta = _json_loads(r['meta'], {})
+        if not isinstance(meta, dict):
+            meta = {}
+        meta.setdefault('trailer', r['trailer'])
+        out.append({
+            'id': r['id'], 'route': r['name'], 'distance': r['distance'], 'cargo': r['max_weight'],
+            'fuel_consumed': r['fuel_consumed'], 'details': r['rows_json'], 'segments_json': '[]',
+            'meta': meta, 'kind': 'trip', 'car_id': r['car_id'],
+            'created_at': r['created_at'], 'has_image': False,
+        })
     return out
 
 
-@csrf_exempt
 @login_required
 def map_api(request):
     if request.method == 'POST':
@@ -433,10 +465,10 @@ def map_api(request):
 
         # ---------- маршрути з карти ----------
         if action == 'fetch_routes':
-            return JsonResponse({'success': True, 'data': _list_records(request.user, 'map')})
+            return JsonResponse({'success': True, 'data': _list_map_routes(request.user)})
 
         elif action == 'fetch_route_image':
-            rec = Calculation.objects.filter(id=request.POST.get('route_id'), user=request.user).first()
+            rec = MapRoute.objects.filter(id=request.POST.get('route_id'), user=request.user).first()
             if not rec or not rec.image_data:
                 return JsonResponse({'success': False, 'message': 'Зображення відсутнє'})
             return JsonResponse({'success': True, 'image_data': rec.image_data})
@@ -445,12 +477,11 @@ def map_api(request):
             image = request.POST.get('image_data', '')
             if len(image) > MAX_IMAGE_CHARS:
                 return JsonResponse({'success': False, 'message': 'Зображення завелике'})
-            route = Calculation.objects.create(
+            route = MapRoute.objects.create(
                 user=request.user,
-                kind='map',
-                route=request.POST.get('name', 'Новий маршрут')[:255],
+                name=request.POST.get('name', 'Новий маршрут')[:255],
                 distance=_num(str(request.POST.get('total_dist', '0')).replace(' км', '').strip()),
-                details=request.POST.get('cities_json', '{}'),
+                cities_json=request.POST.get('cities_json', '{}'),
                 segments_json=request.POST.get('segments_json', '[]'),
                 image_data=image if image.startswith('data:image/') else '',
             )
@@ -459,11 +490,12 @@ def map_api(request):
         # ---------- історія калькулятора: маршрути та поїздки ----------
         elif action == 'fetch_history':
             kind = request.POST.get('kind')
-            if kind not in ('route', 'trip'):
+            if kind == 'route':
+                data = _list_saved_routes(request.user)
+            elif kind == 'trip':
+                data = _list_trips(request.user)
+            else:
                 return JsonResponse({'success': False, 'message': 'Невідомий тип історії'})
-            data = _list_records(request.user, kind)
-            for item in data:
-                item['meta'] = _json_loads(item['meta'], {})
             return JsonResponse({'success': True, 'data': data})
 
         elif action == 'save_history':
@@ -476,65 +508,122 @@ def map_api(request):
             rows = rows[:MAX_ROWS]
             name = (request.POST.get('name') or 'Маршрут').strip()[:255]
             trailer = max(_num(request.POST.get('trailer', 0)), 0.0)
-            total_dist = sum(max(_num(r.get('dist')), 0.0) for r in rows if isinstance(r, dict))
+            total_dist = round(sum(max(_num(r.get('dist')), 0.0) for r in rows if isinstance(r, dict)), 3)
+            rows_json = json.dumps(rows, ensure_ascii=False)
 
-            car, fuel, max_weight, meta = None, 0.0, 0.0, {'trailer': trailer}
             if kind == 'trip':
                 car, result = run_calculation(request.user, request.POST.get('car_id'), rows, trailer)
                 if car is None:
                     return JsonResponse({'success': False, 'message': 'Для збереження поїздки оберіть автомобіль'})
-                fuel, max_weight = result['total_q'], result['max_weight']
-                meta.update({
+                meta = {
+                    'trailer': trailer,
                     'car_id': car.id, 'car_name': car.name, 'car_plate': car.plate,
                     'total_q': result['total_q'], 'oils': result['oils'],
                     'sys_k': result['sys_k'], 'k_on_work': K_APPLIES_TO_TRANSPORT_WORK,
-                })
+                }
+                rec = Trip.objects.create(
+                    user=request.user, car=car, name=name, distance=total_dist,
+                    max_weight=result['max_weight'], trailer=trailer,
+                    fuel_consumed=round(result['total_q'], 2),
+                    rows_json=rows_json, meta=json.dumps(meta, ensure_ascii=False),
+                )
             else:
                 max_weight = max((max(_num(r.get('weight')), 0.0) for r in rows if isinstance(r, dict)), default=0.0)
-
-            rec = Calculation.objects.create(
-                user=request.user, kind=kind, car=car, route=name,
-                distance=round(total_dist, 3), cargo=max_weight, fuel_consumed=round(fuel, 2),
-                details=json.dumps(rows, ensure_ascii=False), meta=json.dumps(meta, ensure_ascii=False),
-            )
+                rec = SavedRoute.objects.create(
+                    user=request.user, name=name, distance=total_dist,
+                    max_weight=max_weight, trailer=trailer, rows_json=rows_json,
+                )
             return JsonResponse({'success': True, 'id': rec.id})
 
-        # ---------- видалення (для будь-якого типу) ----------
+        # ---------- видалення (тип запису обов'язковий: id у таблицях можуть збігатися) ----------
         elif action == 'delete_route':
-            route_id = request.POST.get('route_id')
-            Calculation.objects.filter(id=route_id, user=request.user).delete()
+            model = RECORD_MODELS.get(request.POST.get('kind'))
+            if model is None:
+                return JsonResponse({'success': False, 'message': 'Невідомий тип запису'})
+            model.objects.filter(id=request.POST.get('route_id'), user=request.user).delete()
             return JsonResponse({'success': True})
 
     return JsonResponse({'success': False, 'message': 'Помилка запиту'})
 
 
 # --- API ДЛЯ КНИГИ ОБЛІКУ (book.html) ---
-@csrf_exempt
+# Поточна книга (шапка + рядки) зберігається в BookState, а архів – у UserBook.
+# Усе лежить у базі (Neon), у браузері нічого не залишається.
+def _entries_json(raw):
+    """Перевіряє, що записи книги – коректний JSON-список, інакше повертає None."""
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return json.dumps(value, ensure_ascii=False) if isinstance(value, list) else None
+
+
+def _short_title(html, limit=100):
+    """Назва авто з HTML (напр. «УАЗ <b>вантажний</b>»): якщо не влазить у поле — лишаємо чистий текст."""
+    if len(html) <= limit:
+        return html
+    return re.sub(r'<[^>]+>', '', html)[:limit]
+
+
+def _book_header(post):
+    return {
+        'car_title': post.get('car_title', '').strip(),
+        'car_plate': post.get('car_plate', '').strip()[:50],
+        'fuel_type': post.get('fuel_type', '').strip()[:100],
+        'oil_type': post.get('oil_type', '').strip()[:100],
+    }
+
+
 @login_required
 def book_api(request):
     if request.method == 'POST':
         action = request.POST.get('action')
 
-        if action == 'fetch_books':
+        # ---------- поточна книга ----------
+        if action == 'fetch_state':
+            st, _ = BookState.objects.get_or_create(user=request.user)
+            return JsonResponse({'success': True, 'data': {
+                'car_title': st.car_title, 'car_plate': st.car_plate,
+                'fuel_type': st.fuel_type, 'oil_type': st.oil_type,
+                'entries_data': st.entries_data,
+            }})
+
+        elif action == 'save_state':
+            entries = _entries_json(request.POST.get('entries_data', '[]'))
+            if entries is None:
+                return JsonResponse({'success': False, 'message': 'Невалідні записи книги'})
+            st, _ = BookState.objects.get_or_create(user=request.user)
+            header = _book_header(request.POST)
+            st.car_title = header['car_title']
+            st.car_plate = header['car_plate']
+            st.fuel_type = header['fuel_type']
+            st.oil_type = header['oil_type']
+            st.entries_data = entries
+            st.save()
+            return JsonResponse({'success': True})
+
+        # ---------- архів книг ----------
+        elif action == 'fetch_books':
             books = list(UserBook.objects.filter(user=request.user).order_by('-id').values(
                 'id', 'title', 'car_title', 'car_plate', 'fuel_type', 'oil_type', 'entries_data', 'created_at'
             ))
             return JsonResponse({'success': True, 'data': books})
 
         elif action == 'save_book':
-            try:
-                book = UserBook.objects.create(
-                    user=request.user,
-                    title=request.POST.get('title', 'Без назви').strip(),
-                    car_title=request.POST.get('car_title', '').strip(),
-                    car_plate=request.POST.get('car_plate', '').strip(),
-                    fuel_type=request.POST.get('fuel_type', '').strip(),
-                    oil_type=request.POST.get('oil_type', '').strip(),
-                    entries_data=request.POST.get('entries_data', '[]')
-                )
-                return JsonResponse({'success': True, 'id': book.id})
-            except Exception as e:
-                return JsonResponse({'success': False, 'message': str(e)})
+            entries = _entries_json(request.POST.get('entries_data', '[]'))
+            if entries is None:
+                return JsonResponse({'success': False, 'message': 'Невалідні записи книги'})
+            header = _book_header(request.POST)
+            book = UserBook.objects.create(
+                user=request.user,
+                title=(request.POST.get('title') or 'Без назви').strip()[:255],
+                car_title=_short_title(header['car_title']),
+                car_plate=header['car_plate'],
+                fuel_type=header['fuel_type'],
+                oil_type=header['oil_type'],
+                entries_data=entries,
+            )
+            return JsonResponse({'success': True, 'id': book.id})
 
         elif action == 'delete_book':
             book_id = request.POST.get('book_id')
@@ -545,7 +634,6 @@ def book_api(request):
 
 
 # --- API ДЛЯ БІБЛІОТЕКИ ТА НОТАТОК (library.html) ---
-@csrf_exempt
 @login_required
 def library_api(request):
     if request.method == 'POST':
