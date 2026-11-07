@@ -292,10 +292,10 @@ class CitiesApiTests(TestCase):
         self.api(action='delete_city', city_id=city.id)
         self.assertTrue(City.objects.filter(pk=city.pk).exists())
 
-    def test_legacy_city_without_owner_is_visible_but_not_deletable(self):
+    def test_city_without_owner_is_not_shown_to_anyone(self):
         city = City.objects.create(user=None, name='Старе', percent=7)
         self.login('a@t.ua')
-        self.assertEqual([c['name'] for c in self.api(action='fetch_cities')['data']], ['Старе'])
+        self.assertEqual(self.api(action='fetch_cities')['data'], [])
         self.api(action='delete_city', city_id=city.id)
         self.assertTrue(City.objects.filter(pk=city.pk).exists())
 
