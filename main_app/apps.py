@@ -1,28 +1,30 @@
+import os
+
 from django.apps import AppConfig
+from django.db.models.signals import post_migrate
+
+
+def create_admin(sender, **kwargs):
+    """Створює суперкористувача після міграцій, але ТІЛЬКИ якщо в змінних середовища
+    задано DJANGO_ADMIN_PASSWORD (на Render: Environment -> Add variable).
+    Логін береться з DJANGO_ADMIN_USERNAME (за замовчуванням «admin»), пошта – з DJANGO_ADMIN_EMAIL.
+    Пароль існуючого користувача НІКОЛИ не змінюється й у коді не зберігається."""
+    password = os.environ.get('DJANGO_ADMIN_PASSWORD')
+    if not password:
+        return
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    username = os.environ.get('DJANGO_ADMIN_USERNAME', 'admin')
+    if not User.objects.filter(username=username).exists():
+        User.objects.create_superuser(
+            username=username,
+            email=os.environ.get('DJANGO_ADMIN_EMAIL', ''),
+            password=password,
+        )
 
 
 class MainAppConfig(AppConfig):
     name = 'main_app'
 
     def ready(self):
-        # Автоматичне створення адміна при запуску на новій БД PostgreSQL
-        try:
-            from django.contrib.auth.models import User
-            
-            # Якщо користувача з ім'ям 'admin' ще немає — створюємо його
-            if not User.objects.filter(username='admin').exists():
-                User.objects.create_superuser(
-                    username='admin',
-                    email='sergijmarcinisen1@gmail.com',
-                    password='admin12345'
-                )
-                print("Суперкористувача 'admin' успішно створено!")
-            else:
-                # Якщо він вже існує — переконуємося, що в нього є всі права
-                user = User.objects.get(username='admin')
-                user.is_staff = True
-                user.is_superuser = True
-                user.set_password('admin12345')
-                user.save()
-        except Exception:
-            pass
+        post_migrate.connect(create_admin, sender=self)
