@@ -30,7 +30,7 @@ body{ font-family:"Times New Roman","Liberation Serif",Times,serif; background:#
 .hl .line-input{ display:inline-block; vertical-align:top; border-bottom:.5pt solid #000; outline:none; color:#000; white-space:pre-wrap; }
 .hl1{ height:16.1pt; font-size:14pt; }  .hl1 .line-input{ width:175pt; height:14.6pt; line-height:14.6pt; font-size:12pt; }
 .hl2{ height:13.8pt; font-size:12pt; }  .hl2 .line-input{ width:175pt; height:12.6pt; line-height:12.6pt; }
-.hl.fl{ height:13.8pt; font-size:12pt; } .hl.fl .line-input{ width:180pt; height:12.6pt; line-height:12.6pt; }
+.hl.fl{ height:13.8pt; font-size:12pt; } .hl.fl .line-input{ width:340pt; height:12.6pt; line-height:12.6pt; white-space:nowrap; overflow:hidden; }
 .cap12{ font-size:12pt; height:13.8pt; line-height:13.8pt; }
 .cap10{ font-size:10pt; height:11.5pt; line-height:11.5pt; }
 .line-input:empty:before{ content:attr(data-ph); color:#9a9a9a; font-size:9pt; }
@@ -329,6 +329,8 @@ td[contenteditable="true"]{ outline:none; }
         document.getElementById('car_plate_display').addEventListener('blur', saveHeaderInfo);
         document.getElementById('fuel_type_display').addEventListener('blur', saveHeaderInfo);
         document.getElementById('oil_type_display').addEventListener('blur', saveHeaderInfo);
+        ['fuel_type_display', 'oil_type_display'].forEach(id =>
+            document.getElementById(id).addEventListener('input', fitHeaderLines));
     }
 
     function saveHeaderInfo() {
@@ -344,14 +346,16 @@ td[contenteditable="true"]{ outline:none; }
         const zv = parseFloat(e.distTotal) || 0;
         const v = parseFloat(e.weight) || 0;
         
-        let mv = 4.5;
+        // максимальна вантажопідйомність береться з бази ТЗ; якщо її немає — ефективність не рахується
+        let mv = 0;
         if (e.calcDetails && e.calcDetails.mv) {
-            mv = parseFloat(e.calcDetails.mv) || 4.5;
+            mv = parseFloat(e.calcDetails.mv) || 0;
         }
+        const hasPayload = mv > 0;
 
         const kf1 = zv > 0 ? (vv / zv) : 0;
-        const kf2 = mv > 0 ? (v / mv) : 0;
-        const eff = (kf1 * kf2 * 100);
+        const kf2 = hasPayload ? (v / mv) : 0;
+        const eff = hasPayload ? (kf1 * kf2 * 100) : null;
 
         return {
             vv: vv.toFixed(1),
@@ -360,7 +364,8 @@ td[contenteditable="true"]{ outline:none; }
             mv: mv.toFixed(1),
             kf1: kf1.toFixed(2),
             kf2: kf2.toFixed(2),
-            eff: eff.toFixed(1)
+            hasPayload: hasPayload,
+            eff: hasPayload ? eff.toFixed(1) : ''
         };
     }
 
@@ -388,7 +393,20 @@ td[contenteditable="true"]{ outline:none; }
             }
         });
     }
-    window.addEventListener('beforeprint', fitCells);
+    // нижні два рядки (паливо, оливи) завжди в один рядок: якщо текст довгий — зменшуємо шрифт
+    function fitHeaderLines() {
+        ['fuel_type_display', 'oil_type_display'].forEach(id => {
+            const el = document.getElementById(id);
+            let fs = 12;
+            el.style.fontSize = fs + 'pt';
+            let guard = 0;
+            while (el.scrollWidth > el.clientWidth + 0.5 && fs > 6 && guard++ < 24) {
+                fs -= 0.5;
+                el.style.fontSize = fs + 'pt';
+            }
+        });
+    }
+    window.addEventListener('beforeprint', () => { fitCells(); fitHeaderLines(); });
 
     function renderTable(skipSave) {
         const tbody = document.getElementById('bookBody');
@@ -398,6 +416,7 @@ td[contenteditable="true"]{ outline:none; }
         document.getElementById('car_plate_display').innerText = bookHeader.car_plate;
         document.getElementById('fuel_type_display').innerText = bookHeader.fuel_type;
         document.getElementById('oil_type_display').innerText = bookHeader.oil_type;
+        fitHeaderLines();
 
         document.getElementById('emptyNote').innerText = currentEntries.length === 0
             ? 'Книга порожня. Натисніть "Додати з Дорожнього листа" або введіть дані вручну в рядки таблиці.'
@@ -412,7 +431,9 @@ td[contenteditable="true"]{ outline:none; }
             let html = '';
             BOOK_COLS.forEach(c => {
                 if (c === null) {
-                    html += `<td><span class="eff-badge" title="Натисніть для перегляду розрахунку" onclick="showEffDetails(${idx})">${e.eff}%</span></td>`;
+                    const effText = e.eff === '' ? '—' : `${e.eff}%`;
+                    const effTitle = e.eff === '' ? 'Не розраховано: у базі ТЗ не вказана вантажопідйомність' : 'Натисніть для перегляду розрахунку';
+                    html += `<td><span class="eff-badge" title="${effTitle}" onclick="showEffDetails(${idx})">${effText}</span></td>`;
                     return;
                 }
                 const [field, def, cls, style, bold] = c;
@@ -479,16 +500,15 @@ td[contenteditable="true"]{ outline:none; }
         const totalQ = parseFloat(last.totalFuel || 0);
         const tkmVal = (totalCargo * maxWeight).toFixed(1);
 
+        // вантажопідйомність — лише з бази ТЗ (її віддає сервер разом із розрахунком)
         let maxPayload = parseFloat(last.maxPayload) || 0;
         const selectedCarObj = JSON.parse(localStorage.getItem('selectedCar')) || {};
-        if (!maxPayload && selectedCarObj.maxPayload) {
-            maxPayload = parseFloat(selectedCarObj.maxPayload);
-        }
-        if (!maxPayload) maxPayload = 4.5;
+        // без вказаної вантажопідйомності ефективність не рахуємо (раніше підставлялось 4,5 т)
+        const hasPayload = maxPayload > 0;
 
         const kf1 = totalDist > 0 ? (totalCargo / totalDist) : 0;
-        const kf2 = maxPayload > 0 ? (maxWeight / maxPayload) : 0;
-        const effVal = (kf1 * kf2 * 100);
+        const kf2 = hasPayload ? (maxWeight / maxPayload) : 0;
+        const effText = hasPayload ? (kf1 * kf2 * 100).toFixed(1) : '';
 
         const om = (totalQ * (parseFloat(last.om) || 0) / 100).toFixed(2);
         const ot = (totalQ * (parseFloat(last.ot) || 0) / 100).toFixed(2);
@@ -547,7 +567,7 @@ td[contenteditable="true"]{ outline:none; }
 
         let fullTitleHTML = extractedTitle;
         if (categoryFormatted) {
-            fullTitleHTML = `${extractedTitle} <b>${categoryFormatted}</b>`;
+            fullTitleHTML = `${extractedTitle} <b>(${categoryFormatted})</b>`;
         }
 
         if (extractedTitle) {
@@ -565,15 +585,16 @@ td[contenteditable="true"]{ outline:none; }
             bookHeader.fuel_type = last.fuelType;
         }
         const oilNames = [];
-        if (oilUse.om) oilNames.push('моторна олива');
-        if (oilUse.ot) oilNames.push('трансмісійна олива');
-        if (oilUse.os) oilNames.push('спеціальна олива');
-        if (oilUse.op) oilNames.push('пластичне мастило');
+        if (oilUse.om) oilNames.push('моторна');
+        if (oilUse.ot) oilNames.push('трансмісійна');
+        if (oilUse.os) oilNames.push('спеціальна');
+        if (oilUse.op) oilNames.push('пластичне');
         if (last.hasAdBlue) oilNames.push('AdBlue');
         if (last.serverCalculated) {
             const oilText = oilNames.join(', ');
             document.getElementById('oil_type_display').innerText = oilText;
             bookHeader.oil_type = oilText;
+            fitHeaderLines();
         }
 
         const newEntry = {
@@ -589,7 +610,7 @@ td[contenteditable="true"]{ outline:none; }
             weightTrailer: last.trailerActive ? (last.gTrailler || "0") : "",
             tkm: tkmVal,
             tkmTrailer: last.trailerActive ? (totalCargo * (parseFloat(last.gTrailler) || 0)).toFixed(1) : "",
-            eff: effVal.toFixed(1),
+            eff: effText,
             calcDetails: {
                 vv: totalCargo.toFixed(1),
                 zv: totalDist.toFixed(1),
@@ -597,7 +618,8 @@ td[contenteditable="true"]{ outline:none; }
                 mv: maxPayload.toFixed(1),
                 kf1: kf1.toFixed(2),
                 kf2: kf2.toFixed(2),
-                eff: effVal.toFixed(1)
+                hasPayload: hasPayload,
+                eff: effText
             },
             fuelStart: "",
             oilStart: "",
@@ -618,7 +640,9 @@ td[contenteditable="true"]{ outline:none; }
         currentEntries.push(newEntry);
         persistState();
         renderTable();
-        alert("Запис успішно додано до Книги обліку!");
+        alert(hasPayload
+            ? "Запис додано до Книги обліку"
+            : "Запис додано. Ефективність не розраховано: у базі ТЗ не вказана вантажопідйомність авто");
     }
 
     function showEffDetails(idx) {
@@ -628,6 +652,16 @@ td[contenteditable="true"]{ outline:none; }
         const details = calculateKfForEntry(item);
 
         const modalBody = document.getElementById('modalBody');
+        if (!details.hasPayload) {
+            modalBody.innerHTML = `
+                <div class="calc-step" style="border-left-color: #e74c3c; background: #fdecea;">
+                    <b>Показник ефективності не розраховується.</b><br>
+                    У базі ТЗ не вказана максимальна вантажопідйомність цього авто.<br>
+                    Відкрийте «Автопарк», натисніть олівець біля авто, поставте галочку «Вантажний ТЗ» і вкажіть «Макс. вантажопідйомність (тонн)».
+                </div>`;
+            document.getElementById('effModal').style.display = 'flex';
+            return;
+        }
         modalBody.innerHTML = `
             <div style="font-size: 11px; margin-bottom: 8px; color: #555;">
                 <b>Вихідні дані з запису від ${item.date || '-'}:</b>
