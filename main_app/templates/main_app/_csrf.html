@@ -54,3 +54,30 @@
     };
 })();
 </script>
+<script>
+/* Безпека сеансу: після закриття вкладки або тривалого «згортання» сайту потрібно входити знову.
+   Змініть AWAY_MINUTES, щоб змінити час, після якого сайт вимагатиме повторний вхід. */
+(function () {
+    var AWAY_MINUTES = 5;
+    var KEY = 'tem_tab', HID = 'tem_hidden_at';
+    function get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+    function set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+    function del(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
+    var loggedIn = {% if user.is_authenticated %}true{% else %}false{% endif %};
+    function leave() { del(KEY); del(HID); location.replace('{% url "logout" %}'); }
+    if (!loggedIn) { set(KEY, '1'); del(HID); return; }
+    /* Вкладку відкрито заново (закрили й повернулися) — без позначки вкладки сеанс не діє. */
+    if (!get(KEY)) { leave(); return; }
+    function check() {
+        var t = parseInt(get(HID) || '0', 10);
+        if (t && Date.now() - t > AWAY_MINUTES * 60000) { leave(); return true; }
+        del(HID);
+        return false;
+    }
+    if (check()) return;
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) set(HID, String(Date.now())); else check();
+    });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) check(); });
+})();
+</script>
