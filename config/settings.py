@@ -177,3 +177,8 @@ STORAGES = {
 # --------------------------------------------------------------------------
 # (у Django немає налаштування MAILERS — використовується EMAIL_BACKEND)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Сеанс: закінчується при закритті браузера та після 30 хв без активності.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 30 * 60
+SESSION_SAVE_EVERY_REQUEST = True
