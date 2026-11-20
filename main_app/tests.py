@@ -358,3 +358,15 @@ class OilFlagsCalcTests(TestCase):
         self.assertAlmostEqual(r['oils']['op'], 30 * 0.2 / 100, places=4)
         self.assertEqual((r['car']['use_ot'], r['car']['fuel_type'], r['car']['category']),
                          (False, 'Дизельне пальне', 'Вантажні'))
+
+
+class LibraryUploadDisabledTests(TestCase):
+    def test_upload_doc_is_disabled(self):
+        from .models import UserLibrary
+        user = User.objects.create_user(username='l@t.ua', email='l@t.ua', password='123456')
+        c = Client()
+        c.force_login(user)
+        r = c.post('/api/library/', {'action': 'upload_doc', 'file_name': 'a.pdf',
+                                     'file_data': 'data:application/pdf;base64,AAAA'})
+        self.assertFalse(r.json()['success'])
+        self.assertEqual(UserLibrary.objects.filter(user=user).count(), 0)
