@@ -667,16 +667,8 @@ def library_api(request):
             return JsonResponse({'success': True, 'data': docs})
 
         elif action == 'upload_doc':
-            file_name = request.POST.get('file_name', 'Документ.pdf').strip()
-            file_data = request.POST.get('file_data', '')
-            if file_data:
-                doc = UserLibrary.objects.create(
-                    user=request.user,
-                    file_name=file_name,
-                    file_data=file_data
-                )
-                return JsonResponse({'success': True, 'id': doc.id})
-            return JsonResponse({'success': False, 'message': 'Файл порожній'})
+            # Додавання документів тимчасово вимкнено, щоб файли не заповнювали базу даних.
+            return JsonResponse({'success': False, 'message': 'Додавання документів — у розробці'})
 
         elif action == 'delete_doc':
             doc_id = request.POST.get('doc_id')
