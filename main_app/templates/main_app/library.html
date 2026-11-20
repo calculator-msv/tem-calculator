@@ -32,10 +32,9 @@
     </div>
 
     <div class="section-box">
-        <h3>➕ Завантажити документ у базу даних</h3>
-        <p style="font-size: 13px; color: #bdc3c7; margin-bottom: 15px;">Оберіть PDF-файл (до 16 МБ) для збереження у вашому акаунті на сервері.</p>
-        <label for="fileInput" class="upload-label">📎 Обрати файл PDF</label>
-        <input type="file" id="fileInput" accept="application/pdf" onchange="uploadFile(event)">
+        <h3>➕ Додати документ</h3>
+        <p style="font-size: 13px; color: #bdc3c7; margin-bottom: 15px;">Додавання документів поки що в розробці.</p>
+        <button type="button" class="upload-label" style="border: none;" onclick="uploadInDevelopment()">📎 Додати документ</button>
     </div>
 
     <div class="section-box">
@@ -140,37 +139,8 @@
             });
     }
 
-    function uploadFile(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        if (file.size > 16 * 1024 * 1024) {
-            alert("Файл занадто великий! Максимальний розмір PDF для завантаження в БД — 16 МБ.");
-            event.target.value = '';
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const formData = new FormData();
-            formData.append('action', 'upload_doc');
-            formData.append('file_name', file.name);
-            formData.append('file_data', e.target.result);
-
-            fetch('/api/library/', { method: 'POST', body: formData })
-                .then(res => res.json())
-                .then(res => {
-                    if (res.success) {
-                        alert("Файл успішно збережено в базі даних!");
-                        fetchDocsFromDB();
-                    } else {
-                        alert("Не вдалося зберегти файл: " + (res.message || "помилка"));
-                    }
-                })
-                .catch(err => alert("Помилка відправки файлу на сервер."));
-        };
-        reader.readAsDataURL(file);
-        event.target.value = '';
+    function uploadInDevelopment() {
+        alert("Додавання документів — у розробці.");
     }
 
     function viewDoc(id) {
