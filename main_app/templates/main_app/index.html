@@ -4,148 +4,111 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Система ТЕМ ДПСУ</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --panel-left: #13342a;
-            --panel-right: #0f1a15;
-            --field: #16231d;
-            --cream: #f1ead2;
-            --muted: #9aa79f;
-            --gold: #e3b341;
-            --gold-hover: #f0c255;
-        }
-        * { box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', sans-serif;
-            background: #14201a;
+            background: #1b3022;
             color: white;
             margin: 0;
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 16px;
         }
-
-        /* ===== КАРТКА ВХОДУ: ліва панель (емблема) + права (форма) ===== */
-        .login-card {
-            display: flex;
-            width: 860px;
-            max-width: 100%;
-            min-height: 440px;
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.08);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+        .card {
+            background: rgba(0,0,0,0.7);
+            padding: 30px;
+            border-radius: 10px;
+            width: 340px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
         }
-        .brand-panel {
-            flex: 0 0 40%;
-            background: var(--panel-left);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 26px;
-            padding: 30px 20px;
-        }
-        /* Емблему та «ТЕМ» збільшено приблизно вдвічі. Опису під «ТЕМ» більше немає. */
-        .brand-emblem { width: 190px; height: 190px; display: block; }
-        .brand-name {
-            font-family: 'Oswald', 'Arial Narrow', sans-serif;
-            font-weight: 600;
-            font-size: 72px;
-            line-height: 1;
-            letter-spacing: 6px;
-            color: var(--cream);
-            margin: 0;
-            padding-left: 6px; /* компенсує letter-spacing, щоб текст стояв по центру */
-        }
-
-        .form-panel {
-            flex: 1;
-            background: var(--panel-right);
-            padding: 40px 44px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-        .form-panel h2 {
-            font-family: 'Oswald', 'Arial Narrow', sans-serif;
-            font-weight: 600;
-            font-size: 30px;
-            letter-spacing: 1px;
-            color: var(--cream);
-            margin: 0 0 22px;
-            text-transform: uppercase;
-        }
+        h2 { margin-bottom: 15px; color: #2ecc71; }
+        .tabs { display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px solid #444; }
+        .tab-btn { background: none; border: none; color: #aaa; padding: 10px; cursor: pointer; font-size: 15px; width: 50%; font-weight: bold; }
+        .tab-btn.active { color: #2ecc71; border-bottom: 2px solid #2ecc71; }
         .form-group { display: none; }
         .form-group.active { display: block; }
-        label { display: block; font-size: 14px; color: var(--muted); margin: 14px 0 6px; }
         input {
             width: 100%;
-            padding: 13px 14px;
-            border-radius: 7px;
-            border: 1px solid rgba(255,255,255,0.06);
-            background: var(--field);
+            padding: 12px;
+            margin: 6px 0;
+            box-sizing: border-box;
+            border-radius: 5px;
+            border: 1px solid #444;
+            background: #222;
             color: #fff;
-            font-size: 15px;
-            outline: none;
         }
-        input:focus { border-color: var(--gold); }
         button.action-btn {
             width: 100%;
-            padding: 14px;
-            margin-top: 20px;
-            background: var(--gold);
-            color: #1b1b12;
+            padding: 12px;
+            background: #27ae60;
+            color: white;
             border: none;
-            border-radius: 7px;
+            border-radius: 5px;
             cursor: pointer;
-            font-weight: 700;
+            font-weight: bold;
+            margin-top: 10px;
             font-size: 16px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
         }
-        button.action-btn:hover { background: var(--gold-hover); }
-        .links { display: flex; gap: 18px; margin-top: 22px; }
-        .link-btn {
-            background: none; border: none; padding: 0; cursor: pointer;
-            font-size: 14px; text-decoration: underline; font-family: inherit;
+        button.action-btn:hover { background: #219150; }
+        .guest-btn {
+            background: #2980b9;
+            margin-top: 10px;
+            width: 100%;
+            padding: 12px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
         }
-        .link-gold { color: var(--gold); }
-        .link-muted { color: var(--muted); }
-        .alert-error { background: #c0392b; color: white; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+        .guest-btn:hover { background: #1f6694; }
+        .alert-error { background: #e74c3c; color: white; padding: 10px; border-radius: 5px; font-size: 13px; margin-bottom: 12px; }
 
-        @media (max-width: 680px) {
-            .login-card { flex-direction: column; min-height: 0; }
-            .brand-panel { flex-basis: auto; gap: 14px; padding: 24px 20px; }
-            .brand-emblem { width: 130px; height: 130px; }
-            .brand-name { font-size: 52px; }
-            .form-panel { padding: 28px 24px; }
-        }
-
-        /* ===== ГОЛОВНЕ МЕНЮ ПІСЛЯ ВХОДУ (без змін) ===== */
         .user-header {
-            position: absolute; top: 20px; right: 20px; z-index: 10;
-            display: flex; align-items: center; gap: 15px;
-            background: rgba(0, 0, 0, 0.6); padding: 10px 20px; border-radius: 10px;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .logout-btn {
-            background: #e74c3c; color: white; border: none; padding: 8px 15px;
-            border-radius: 5px; cursor: pointer; font-weight: bold; text-decoration: none;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
         }
         .menu-container {
-            background: rgba(0, 0, 0, 0.6); padding: 40px; border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1); width: 380px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5); text-align: center;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 380px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            text-align: center;
         }
         .btn-menu {
-            display: flex; align-items: center; text-decoration: none; color: white;
-            padding: 16px 20px; margin-bottom: 15px; border-radius: 10px;
-            font-weight: bold; transition: 0.3s;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: white;
+            padding: 16px 20px;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: 0.3s;
         }
         .btn-calc { background: #27ae60; } .btn-calc:hover { background: #2ecc71; }
         .btn-docs { background: #2980b9; } .btn-docs:hover { background: #3498db; }
@@ -156,6 +119,7 @@
 <body>
 
 {% if user.is_authenticated %}
+    <!-- ГОЛОВНЕ МЕНЮ (Прибрано Книгу обліку) -->
     <div class="user-header">
         <span>👤 <b>{{ user.first_name|default:user.username }}</b></span>
         <a href="{% url 'logout' %}" class="logout-btn">Вийти</a>
@@ -174,80 +138,55 @@
     </div>
 
 {% else %}
-    <div class="login-card">
+    <!-- ФОРМА ВХОДУ ТА РЕЄСТРАЦІЇ -->
+    <div class="card">
+        <h2>Система ТЕМ</h2>
 
-        <!-- ЛІВА ПАНЕЛЬ: емблема ДПСУ + «ТЕМ» -->
-        <div class="brand-panel">
-            <!-- ▼▼ ЕМБЛЕМА. Якщо у вас в старому коді вже є своя емблема (картинка/SVG),
-                 замініть цей <svg> на неї, залишивши class="brand-emblem" ▼▼ -->
-            <svg class="brand-emblem" viewBox="0 0 100 100" role="img" aria-label="Емблема ДПСУ">
-                <g fill="#fff">
-                    <polygon points="32,2 68,2 58,36 42,36"/>
-                    <polygon points="32,98 68,98 58,64 42,64"/>
-                    <polygon points="2,32 2,68 36,58 36,42"/>
-                    <polygon points="98,32 98,68 64,58 64,42"/>
-                </g>
-                <circle cx="50" cy="50" r="19" fill="#13342a"/>
-                <g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M50 36 V63"/>
-                    <path d="M41 38 V52 Q41 58 50 61 Q59 58 59 52 V38"/>
-                    <path d="M44 64 H56"/>
-                </g>
-            </svg>
-            <!-- ▲▲ кінець емблеми ▲▲ -->
-            <p class="brand-name">ТЕМ</p>
+        {% if error_msg %}
+            <div class="alert-error">{{ error_msg }}</div>
+        {% endif %}
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('login')">ВХІД</button>
+            <button class="tab-btn" onclick="switchTab('register')">РЕЄСТРАЦІЯ</button>
         </div>
 
-        <!-- ПРАВА ПАНЕЛЬ: форми -->
-        <div class="form-panel">
-            {% if error_msg %}
-                <div class="alert-error">{{ error_msg }}</div>
-            {% endif %}
+        <form id="login-form" class="form-group active" method="POST" action="{% url 'index' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="login">
+            <input type="email" name="email" placeholder="Email (Електронна пошта)" required>
+            <input type="password" name="password" placeholder="Пароль" required>
+            <button type="submit" class="action-btn">УВІЙТИ</button>
+        </form>
 
-            <form id="login-form" class="form-group active" method="POST" action="{% url 'index' %}">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="login">
-                <h2>Вхід у систему</h2>
-                <label for="login-email">Електронна пошта</label>
-                <input id="login-email" type="email" name="email" placeholder="user@example.com" required>
-                <label for="login-pass">Пароль</label>
-                <input id="login-pass" type="password" name="password" placeholder="••••••••" required>
-                <button type="submit" class="action-btn">Увійти</button>
-            </form>
+        <form id="register-form" class="form-group" method="POST" action="{% url 'index' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="register">
+            <input type="text" name="fullname" placeholder="ПІБ або Підрозділ" required>
+            <input type="email" name="email" placeholder="Email (Електронна пошта)" required>
+            <input type="password" name="password" placeholder="Пароль (від 6 символів)" required>
+            <button type="submit" class="action-btn">ЗАРЕЄСТРУВАТИСЯ</button>
+        </form>
 
-            <form id="register-form" class="form-group" method="POST" action="{% url 'index' %}">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="register">
-                <h2>Реєстрація</h2>
-                <label for="reg-name">ПІБ або підрозділ</label>
-                <input id="reg-name" type="text" name="fullname" required>
-                <label for="reg-email">Електронна пошта</label>
-                <input id="reg-email" type="email" name="email" required>
-                <label for="reg-pass">Пароль (від 6 символів)</label>
-                <input id="reg-pass" type="password" name="password" required>
-                <button type="submit" class="action-btn">Зареєструватися</button>
-            </form>
-
-            <div class="links">
-                <button type="button" class="link-btn link-gold" id="toggle-btn" onclick="toggleForm()">Реєстрація</button>
-                <form method="POST" action="{% url 'index' %}" style="margin:0;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="guest">
-                    <button type="submit" class="link-btn link-muted">Гість</button>
-                </form>
-            </div>
-        </div>
+        <form method="POST" action="{% url 'index' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="guest">
+            <button type="submit" class="guest-btn">УВІЙТИ ЯК ГІСТЬ</button>
+        </form>
     </div>
 
     <script>
-        function toggleForm() {
-            var login = document.getElementById('login-form');
-            var reg = document.getElementById('register-form');
-            var btn = document.getElementById('toggle-btn');
-            var toReg = !reg.classList.contains('active');
-            reg.classList.toggle('active', toReg);
-            login.classList.toggle('active', !toReg);
-            btn.textContent = toReg ? 'Вхід' : 'Реєстрація';
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.form-group').forEach(form => form.classList.remove('active'));
+
+            if (tab === 'login') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('login-form').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('register-form').classList.add('active');
+            }
         }
     </script>
 {% endif %}
